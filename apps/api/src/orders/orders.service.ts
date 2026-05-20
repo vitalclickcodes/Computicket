@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { randomBytes } from 'crypto';
+import { Prisma } from '@computicket/db';
 import { PrismaService } from '../prisma/prisma.service';
 import { PaystackService } from '../payments/paystack.service';
 
@@ -34,43 +35,61 @@ export class OrdersService {
     if (event.status !== 'PUBLISHED') throw new BadRequestException('Event is not on sale');
 
     const ttById = new Map(event.ticketTypes.map((t) => [t.id, t]));
-    let subtotal = 0;
-    const items: Array<{ ticketTypeId: string; quantity: number; unitPriceKobo: number }> = [];
-
     for (const item of input.items) {
       const tt = ttById.get(item.ticketTypeId);
       if (!tt) throw new BadRequestException(`Unknown ticketTypeId ${item.ticketTypeId}`);
       if (item.quantity <= 0) throw new BadRequestException('Quantity must be positive');
-      if (tt.sold + item.quantity > tt.capacity) {
-        throw new BadRequestException(`Ticket type "${tt.name}" sold out`);
-      }
-      subtotal += tt.priceKobo * item.quantity;
-      items.push({ ticketTypeId: tt.id, quantity: item.quantity, unitPriceKobo: tt.priceKobo });
     }
 
-    const fee = Math.round(subtotal * 0.015);
-    const total = subtotal + fee;
     const reference = `ctng_${randomBytes(8).toString('hex')}`;
 
-    const order = await this.prisma.order.create({
-      data: {
-        eventId: event.id,
-        buyerEmail: input.buyerEmail,
-        buyerName: input.buyerName,
-        buyerPhone: input.buyerPhone,
-        subtotalKobo: subtotal,
-        feeKobo: fee,
-        totalKobo: total,
-        expiresAt: new Date(Date.now() + HOLD_MINUTES * 60_000),
-        paystackRef: reference,
-        items: { create: items },
-      },
-      include: { items: true },
+    const order = await this.prisma.$transaction(async (tx) => {
+      let subtotal = 0;
+      const items: Array<{ ticketTypeId: string; quantity: number; unitPriceKobo: number }> = [];
+
+      for (const item of input.items) {
+        const tt = ttById.get(item.ticketTypeId)!;
+        // Atomic hold: only succeed if (sold + held + quantity) <= capacity.
+        const claimed = await tx.$executeRaw(Prisma.sql`
+          UPDATE "TicketType"
+          SET held = held + ${item.quantity}, "updatedAt" = NOW()
+          WHERE id = ${tt.id}
+            AND (sold + held + ${item.quantity}) <= capacity
+        `);
+        if (claimed === 0) {
+          throw new BadRequestException(`Ticket type "${tt.name}" sold out`);
+        }
+        subtotal += tt.priceKobo * item.quantity;
+        items.push({
+          ticketTypeId: tt.id,
+          quantity: item.quantity,
+          unitPriceKobo: tt.priceKobo,
+        });
+      }
+
+      const fee = Math.round(subtotal * 0.015);
+      const total = subtotal + fee;
+
+      return tx.order.create({
+        data: {
+          eventId: event.id,
+          buyerEmail: input.buyerEmail,
+          buyerName: input.buyerName,
+          buyerPhone: input.buyerPhone,
+          subtotalKobo: subtotal,
+          feeKobo: fee,
+          totalKobo: total,
+          expiresAt: new Date(Date.now() + HOLD_MINUTES * 60_000),
+          paystackRef: reference,
+          items: { create: items },
+        },
+        include: { items: true },
+      });
     });
 
     const paystack = await this.paystack.initialize({
       email: input.buyerEmail,
-      amountKobo: total,
+      amountKobo: order.totalKobo,
       reference,
       callbackUrl: input.callbackUrl,
       metadata: { orderId: order.id, eventSlug: event.slug },

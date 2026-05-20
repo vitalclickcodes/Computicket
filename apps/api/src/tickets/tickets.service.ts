@@ -50,9 +50,13 @@ export class TicketsService {
 
       const created: { id: string; code: string }[] = [];
       for (const item of order.items) {
+        // Convert the hold into a sale: held -= qty, sold += qty.
         await tx.ticketType.update({
           where: { id: item.ticketTypeId },
-          data: { sold: { increment: item.quantity } },
+          data: {
+            sold: { increment: item.quantity },
+            held: { decrement: item.quantity },
+          },
         });
         for (let i = 0; i < item.quantity; i++) {
           const ticket = await tx.ticket.create({

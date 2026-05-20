@@ -114,6 +114,7 @@ model TicketType {
   priceKobo   Int
   capacity    Int
   sold        Int      @default(0)
+  held        Int      @default(0)
   position    Int      @default(0)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt

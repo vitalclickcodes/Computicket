@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "TicketType" ADD COLUMN     "held" INTEGER NOT NULL DEFAULT 0;

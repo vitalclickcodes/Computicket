@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { createHmac, timingSafeEqual } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { TicketsService } from '../tickets/tickets.service';
+import { MailerService } from '../mail/mailer.service';
 
 interface PaystackChargeSuccess {
   event: 'charge.success';
@@ -19,6 +20,7 @@ export class WebhooksService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly tickets: TicketsService,
+    private readonly mailer: MailerService,
   ) {}
 
   verifyPaystackSignature(rawBody: Buffer, signature: string | undefined): boolean {
@@ -55,6 +57,35 @@ export class WebhooksService {
     }
 
     const result = await this.tickets.issueForOrder(order.id);
+
+    // Only send the confirmation on the first issuance, not on webhook replays.
+    if (result.issued) {
+      const full = await this.prisma.order.findUniqueOrThrow({
+        where: { id: order.id },
+        include: {
+          event: true,
+          tickets: { include: { ticketType: { select: { name: true } } } },
+        },
+      });
+      try {
+        await this.mailer.sendOrderConfirmation({
+          to: full.buyerEmail,
+          buyerName: full.buyerName,
+          eventTitle: full.event.title,
+          eventVenue: full.event.venue,
+          eventCity: full.event.city,
+          eventStartsAt: full.event.startsAt,
+          totalKobo: full.totalKobo,
+          tickets: full.tickets.map((t) => ({
+            code: t.code,
+            ticketTypeName: t.ticketType.name,
+          })),
+        });
+      } catch (e) {
+        this.logger.error(`Email send failed for order ${order.id}: ${(e as Error).message}`);
+      }
+    }
+
     return { handled: true, issued: result.issued, ticketCount: result.tickets.length };
   }
 }

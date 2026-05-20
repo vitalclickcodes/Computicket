@@ -1,0 +1,157 @@
+import { Injectable, Logger } from '@nestjs/common';
+import * as QRCode from 'qrcode';
+
+const POSTMARK_URL = 'https://api.postmarkapp.com/email';
+
+interface OrderConfirmationInput {
+  to: string;
+  buyerName?: string | null;
+  eventTitle: string;
+  eventVenue: string;
+  eventCity: string;
+  eventStartsAt: Date;
+  totalKobo: number;
+  tickets: Array<{ code: string; ticketTypeName: string }>;
+}
+
+@Injectable()
+export class MailerService {
+  private readonly logger = new Logger(MailerService.name);
+
+  private get postmarkToken(): string | undefined {
+    return process.env.POSTMARK_SERVER_TOKEN;
+  }
+
+  private get fromAddress(): string {
+    return process.env.MAIL_FROM ?? 'tickets@computicket.ng';
+  }
+
+  async sendOrderConfirmation(input: OrderConfirmationInput): Promise<void> {
+    const subject = `Your tickets — ${input.eventTitle}`;
+    const html = await this.renderConfirmationHtml(input);
+    const text = this.renderConfirmationText(input);
+
+    if (!this.postmarkToken) {
+      this.logger.log(
+        `[dev mail] to=${input.to} subject="${subject}" tickets=${input.tickets.length}`,
+      );
+      return;
+    }
+
+    const res = await fetch(POSTMARK_URL, {
+      method: 'POST',
+      headers: {
+        accept: 'application/json',
+        'content-type': 'application/json',
+        'x-postmark-server-token': this.postmarkToken,
+      },
+      body: JSON.stringify({
+        From: this.fromAddress,
+        To: input.to,
+        Subject: subject,
+        HtmlBody: html,
+        TextBody: text,
+        MessageStream: 'outbound',
+      }),
+    });
+
+    if (!res.ok) {
+      const body = await res.text();
+      // Don't throw — webhook should still 200 even if email fails. Surface in logs.
+      this.logger.error(`Postmark send failed (${res.status}): ${body}`);
+      return;
+    }
+    this.logger.log(`Sent confirmation to ${input.to} for ${input.tickets.length} tickets`);
+  }
+
+  private async renderConfirmationHtml(input: OrderConfirmationInput): Promise<string> {
+    const ticketBlocks = await Promise.all(
+      input.tickets.map(async (t) => {
+        const dataUri = await QRCode.toDataURL(t.code, {
+          errorCorrectionLevel: 'M',
+          width: 260,
+          margin: 1,
+        });
+        return `
+          <tr>
+            <td style="padding:24px 0;border-bottom:1px solid #e5e7eb">
+              <table cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td style="padding-right:20px">
+                    <img src="${dataUri}" alt="${t.code}" width="180" height="180" style="display:block" />
+                  </td>
+                  <td style="vertical-align:top">
+                    <div style="font-size:12px;color:#6b7280;text-transform:uppercase;letter-spacing:0.05em">${escapeHtml(t.ticketTypeName)}</div>
+                    <div style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:14px;margin-top:6px">${escapeHtml(t.code)}</div>
+                    <div style="font-size:13px;color:#4b5563;margin-top:10px">Show this QR at the gate. One scan only.</div>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>`;
+      }),
+    );
+
+    const greeting = input.buyerName ? `Hi ${escapeHtml(input.buyerName)},` : 'Hi there,';
+    const startsAt = input.eventStartsAt.toLocaleString('en-NG', {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+
+    return `
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Your tickets</title></head>
+<body style="margin:0;padding:0;background:#f9fafb;font-family:ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,Helvetica,Arial">
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f9fafb">
+    <tr><td align="center" style="padding:32px 16px">
+      <table width="560" cellpadding="0" cellspacing="0" border="0" style="background:#ffffff;border-radius:8px;padding:32px">
+        <tr><td>
+          <div style="font-weight:700;color:#008751;font-size:18px">Computicket Nigeria</div>
+          <h1 style="font-size:24px;margin:16px 0 4px">You're going to ${escapeHtml(input.eventTitle)}</h1>
+          <div style="color:#4b5563;font-size:14px">${escapeHtml(input.eventVenue)}, ${escapeHtml(input.eventCity)} · ${escapeHtml(startsAt)}</div>
+          <p style="font-size:15px;color:#111827;margin-top:24px">${greeting} Your payment of ${formatNgn(input.totalKobo)} was received. Here ${input.tickets.length === 1 ? 'is your ticket' : `are your ${input.tickets.length} tickets`}:</p>
+          <table width="100%" cellpadding="0" cellspacing="0" border="0">${ticketBlocks.join('')}</table>
+          <p style="font-size:13px;color:#6b7280;margin-top:24px">Save this email or screenshot the QR codes. Each ticket is single-use.</p>
+        </td></tr>
+      </table>
+      <div style="color:#9ca3af;font-size:12px;margin-top:16px">© Computicket Nigeria</div>
+    </td></tr>
+  </table>
+</body></html>`;
+  }
+
+  private renderConfirmationText(input: OrderConfirmationInput): string {
+    const lines = [
+      `You're going to ${input.eventTitle}`,
+      `${input.eventVenue}, ${input.eventCity}`,
+      `${input.eventStartsAt.toISOString()}`,
+      `Total: ${formatNgn(input.totalKobo)}`,
+      '',
+      'Tickets:',
+      ...input.tickets.map((t) => `  ${t.ticketTypeName} — ${t.code}`),
+      '',
+      'Show the QR codes (in the HTML version of this email) at the gate.',
+    ];
+    return lines.join('\n');
+  }
+}
+
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function formatNgn(kobo: number): string {
+  return new Intl.NumberFormat('en-NG', {
+    style: 'currency',
+    currency: 'NGN',
+    maximumFractionDigits: 0,
+  }).format(kobo / 100);
+}

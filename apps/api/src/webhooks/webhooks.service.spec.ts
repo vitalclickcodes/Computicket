@@ -7,7 +7,7 @@ describe('WebhooksService.verifyPaystackSignature', () => {
 
   beforeEach(() => {
     process.env.PAYSTACK_SECRET_KEY = secret;
-    service = new WebhooksService({} as never, {} as never);
+    service = new WebhooksService({} as never, {} as never, {} as never);
   });
 
   it('accepts a correctly signed payload', () => {
