@@ -1,7 +1,14 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { randomBytes } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { TicketStatus } from '@computicket/db';
+
+const SCAN_ROLES = new Set(['OWNER', 'MANAGER', 'SCANNER']);
 
 function generateTicketCode(): string {
   // 16 alphanumeric chars; collision space ≈ 36^16 ≈ 8e24
@@ -73,22 +80,68 @@ export class TicketsService {
     });
   }
 
-  async scan(code: string, scannerId: string) {
+  async scan(code: string, userId: string) {
     return this.prisma.$transaction(async (tx) => {
-      const ticket = await tx.ticket.findUnique({ where: { code } });
+      const ticket = await tx.ticket.findUnique({
+        where: { code },
+        include: {
+          order: { include: { event: { select: { organizerId: true, title: true } } } },
+          ticketType: { select: { name: true } },
+        },
+      });
       if (!ticket) throw new NotFoundException('Ticket not found');
-      if (ticket.status === TicketStatus.VOIDED) throw new BadRequestException('Ticket voided');
+
+      const membership = await tx.organizerMember.findFirst({
+        where: { userId, organizerId: ticket.order.event.organizerId },
+        select: { role: true },
+      });
+      if (!membership || !SCAN_ROLES.has(membership.role)) {
+        throw new ForbiddenException('Not authorised to scan tickets for this event');
+      }
+
+      if (ticket.status === TicketStatus.VOIDED) {
+        return {
+          ok: false as const,
+          reason: 'voided' as const,
+          ticket: this.publicTicket(ticket),
+        };
+      }
 
       const claim = await tx.ticket.updateMany({
         where: { id: ticket.id, status: TicketStatus.ISSUED },
-        data: { status: TicketStatus.SCANNED, scannedAt: new Date(), scannedBy: scannerId },
+        data: { status: TicketStatus.SCANNED, scannedAt: new Date(), scannedBy: userId },
       });
       if (claim.count === 0) {
-        return { ok: false, reason: 'already_scanned' as const, ticket };
+        return {
+          ok: false as const,
+          reason: 'already_scanned' as const,
+          ticket: this.publicTicket(ticket),
+        };
       }
       const scanned = await tx.ticket.findUniqueOrThrow({ where: { id: ticket.id } });
-      return { ok: true as const, ticket: scanned };
+      return {
+        ok: true as const,
+        ticket: { ...this.publicTicket(ticket), status: scanned.status, scannedAt: scanned.scannedAt },
+      };
     });
+  }
+
+  private publicTicket(t: {
+    id: string;
+    code: string;
+    status: TicketStatus;
+    scannedAt: Date | null;
+    order: { event: { title: string } };
+    ticketType: { name: string };
+  }) {
+    return {
+      id: t.id,
+      code: t.code,
+      status: t.status,
+      scannedAt: t.scannedAt,
+      ticketTypeName: t.ticketType.name,
+      eventTitle: t.order.event.title,
+    };
   }
 
   async findByCode(code: string) {

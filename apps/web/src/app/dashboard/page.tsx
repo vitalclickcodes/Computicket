@@ -67,9 +67,14 @@ export default function DashboardHome() {
           <h1 className="text-2xl font-bold">Your organizers</h1>
           <p className="text-sm text-gray-600 mt-1">Signed in as {me.email}</p>
         </div>
-        <button onClick={handleSignOut} className="text-sm text-gray-500 hover:text-brand">
-          Sign out
-        </button>
+        <div className="flex items-center gap-4">
+          <Link href="/scan" className="text-sm text-brand hover:underline">
+            Open scanner →
+          </Link>
+          <button onClick={handleSignOut} className="text-sm text-gray-500 hover:text-brand">
+            Sign out
+          </button>
+        </div>
       </div>
 
       {me.memberships.length === 0 ? (

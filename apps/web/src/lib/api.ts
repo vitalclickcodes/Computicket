@@ -194,6 +194,20 @@ export const api = {
       `/dashboard/organizers/${organizerSlug}/events/${eventSlug}/orders`,
       { token },
     ),
+  scanTicket: (token: string, code: string) =>
+    request<{
+      ok: boolean;
+      reason?: 'already_scanned' | 'voided';
+      ticket: {
+        id: string;
+        code: string;
+        status: 'ISSUED' | 'SCANNED' | 'VOIDED';
+        scannedAt: string | null;
+        ticketTypeName: string;
+        eventTitle: string;
+      };
+    }>('/tickets/scan', { method: 'POST', token, body: JSON.stringify({ code }) }),
+
   refundOrder: (token: string, orderId: string) =>
     request<{
       orderId: string;
