@@ -60,8 +60,42 @@ model Organizer {
   createdAt        DateTime        @default(now())
   updatedAt        DateTime        @updatedAt
 
-  members OrganizerMember[]
-  events  Event[]
+  members          OrganizerMember[]
+  events           Event[]
+  apiKeys          ApiKey[]
+  webhookEndpoints WebhookEndpoint[]
+}
+
+model ApiKey {
+  id          String    @id @default(cuid())
+  organizerId String
+  name        String
+  // First 16 chars of the raw key, for display (e.g. "ctng_live_a1b2…")
+  prefix      String
+  // SHA-256 of the raw key. Indexed for O(1) lookup at request time.
+  hashedKey   String    @unique
+  lastUsedAt  DateTime?
+  revokedAt   DateTime?
+  createdAt   DateTime  @default(now())
+
+  organizer Organizer @relation(fields: [organizerId], references: [id], onDelete: Cascade)
+
+  @@index([organizerId])
+}
+
+model WebhookEndpoint {
+  id            String   @id @default(cuid())
+  organizerId   String
+  url           String
+  signingSecret String
+  // Event names this endpoint subscribes to, e.g. ["order.paid","order.refunded"]
+  eventTypes    String[]
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now())
+
+  organizer Organizer @relation(fields: [organizerId], references: [id], onDelete: Cascade)
+
+  @@index([organizerId])
 }
 
 model OrganizerMember {

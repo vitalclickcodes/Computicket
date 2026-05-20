@@ -239,6 +239,59 @@ export const api = {
       body: JSON.stringify(body),
     }),
 
+  listApiKeys: (token: string, organizerSlug: string) =>
+    request<Array<{
+      id: string;
+      name: string;
+      prefix: string;
+      lastUsedAt: string | null;
+      revokedAt: string | null;
+      createdAt: string;
+    }>>(`/dashboard/organizers/${organizerSlug}/api-keys`, { token }),
+  createApiKey: (token: string, organizerSlug: string, name: string) =>
+    request<{ id: string; name: string; prefix: string; createdAt: string; key: string }>(
+      `/dashboard/organizers/${organizerSlug}/api-keys`,
+      { method: 'POST', token, body: JSON.stringify({ name }) },
+    ),
+  revokeApiKey: (token: string, organizerSlug: string, id: string) =>
+    request<{ id: string; revoked: true }>(
+      `/dashboard/organizers/${organizerSlug}/api-keys/${id}`,
+      { method: 'DELETE', token },
+    ),
+
+  listWebhookEndpoints: (token: string, organizerSlug: string) =>
+    request<Array<{
+      id: string;
+      url: string;
+      eventTypes: string[];
+      active: boolean;
+      createdAt: string;
+      signingSecretSuffix: string;
+    }>>(`/dashboard/organizers/${organizerSlug}/webhook-endpoints`, { token }),
+  createWebhookEndpoint: (
+    token: string,
+    organizerSlug: string,
+    body: { url: string; eventTypes: string[] },
+  ) =>
+    request<{
+      id: string;
+      url: string;
+      eventTypes: string[];
+      active: boolean;
+      createdAt: string;
+      signingSecretSuffix: string;
+      signingSecret: string;
+    }>(`/dashboard/organizers/${organizerSlug}/webhook-endpoints`, {
+      method: 'POST',
+      token,
+      body: JSON.stringify(body),
+    }),
+  deleteWebhookEndpoint: (token: string, organizerSlug: string, id: string) =>
+    request<{ id: string; deleted: true }>(
+      `/dashboard/organizers/${organizerSlug}/webhook-endpoints/${id}`,
+      { method: 'DELETE', token },
+    ),
+
   refundOrder: (token: string, orderId: string) =>
     request<{
       orderId: string;

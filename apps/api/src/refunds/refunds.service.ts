@@ -7,6 +7,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { PaystackService } from '../payments/paystack.service';
 import { MailerService } from '../mail/mailer.service';
+import { WebhookDispatcher } from '../developers/webhook-dispatcher.service';
 
 @Injectable()
 export class RefundsService {
@@ -16,6 +17,7 @@ export class RefundsService {
     private readonly prisma: PrismaService,
     private readonly paystack: PaystackService,
     private readonly mailer: MailerService,
+    private readonly outbound: WebhookDispatcher,
   ) {}
 
   async refund(orderId: string): Promise<{
@@ -29,7 +31,15 @@ export class RefundsService {
       where: { id: orderId },
       include: {
         items: true,
-        event: { select: { title: true, venue: true, city: true, startsAt: true } },
+        event: {
+          select: {
+            title: true,
+            venue: true,
+            city: true,
+            startsAt: true,
+            organizerId: true,
+          },
+        },
       },
     });
     if (!order) throw new NotFoundException(`Order ${orderId} not found`);
@@ -80,6 +90,19 @@ export class RefundsService {
     });
 
     if (!result.alreadyRefunded) {
+      this.outbound
+        .dispatch({
+          organizerId: order.event.organizerId,
+          event: 'order.refunded',
+          data: {
+            orderId: order.id,
+            reference: order.paystackRef,
+            refundedAmountKobo: order.totalKobo,
+            voidedTickets: result.voided,
+          },
+        })
+        .catch((e) => this.logger.error(`Outbound dispatch failed: ${e.message}`));
+
       try {
         await this.mailer.sendRefundNotification({
           to: order.buyerEmail,

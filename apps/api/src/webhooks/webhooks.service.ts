@@ -3,6 +3,7 @@ import { createHmac, timingSafeEqual } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { TicketsService } from '../tickets/tickets.service';
 import { MailerService } from '../mail/mailer.service';
+import { WebhookDispatcher } from '../developers/webhook-dispatcher.service';
 
 interface PaystackChargeSuccess {
   event: 'charge.success';
@@ -21,6 +22,7 @@ export class WebhooksService {
     private readonly prisma: PrismaService,
     private readonly tickets: TicketsService,
     private readonly mailer: MailerService,
+    private readonly outbound: WebhookDispatcher,
   ) {}
 
   verifyPaystackSignature(rawBody: Buffer, signature: string | undefined): boolean {
@@ -67,6 +69,23 @@ export class WebhooksService {
           tickets: { include: { ticketType: { select: { name: true } } } },
         },
       });
+
+      // Outbound webhook to the organizer's subscribers.
+      this.outbound
+        .dispatch({
+          organizerId: full.event.organizerId,
+          event: 'order.paid',
+          data: {
+            orderId: full.id,
+            reference: full.paystackRef,
+            totalKobo: full.totalKobo,
+            buyerEmail: full.buyerEmail,
+            eventId: full.eventId,
+            ticketCount: full.tickets.length,
+          },
+        })
+        .catch((e) => this.logger.error(`Outbound dispatch failed: ${e.message}`));
+
       try {
         await this.mailer.sendOrderConfirmation({
           to: full.buyerEmail,

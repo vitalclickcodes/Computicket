@@ -79,12 +79,20 @@ export default function OrganizerDashboard() {
             {overview.organizer.slug} · {overview.organizer.status}
           </div>
         </div>
-        <Link
-          href={`/dashboard/o/${params.slug}/payouts`}
-          className="text-sm text-brand hover:underline mt-3"
-        >
-          Payouts →
-        </Link>
+        <div className="mt-3 flex gap-4">
+          <Link
+            href={`/dashboard/o/${params.slug}/payouts`}
+            className="text-sm text-brand hover:underline"
+          >
+            Payouts →
+          </Link>
+          <Link
+            href={`/dashboard/o/${params.slug}/developers`}
+            className="text-sm text-brand hover:underline"
+          >
+            Developers →
+          </Link>
+        </div>
       </div>
 
       <div className="mt-6 grid sm:grid-cols-3 gap-3">
