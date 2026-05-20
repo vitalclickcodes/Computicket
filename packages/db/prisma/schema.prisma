@@ -239,6 +239,42 @@ model Organizer {
   hotels           Hotel[]
   flights          Flight[]
   voucherBatches   VoucherBatch[]
+  oauthClients     OAuthClient[]
+}
+
+model OAuthClient {
+  id               String    @id @default(cuid())
+  organizerId      String
+  // Public client identifier
+  clientId         String    @unique
+  // sha256 of the client secret (never stored in plaintext)
+  clientSecretHash String
+  name             String
+  // Space-separated scope list, e.g. "events:read orders:read"
+  scopes           String
+  redirectUris     String[]  @default([])
+  active           Boolean   @default(true)
+  createdAt        DateTime  @default(now())
+
+  organizer    Organizer       @relation(fields: [organizerId], references: [id], onDelete: Cascade)
+  accessTokens OAuthAccessToken[]
+
+  @@index([clientId])
+  @@index([organizerId])
+}
+
+model OAuthAccessToken {
+  id        String   @id @default(cuid())
+  clientId  String
+  // sha256(token); the plaintext is returned only at issuance
+  tokenHash String   @unique
+  scopes    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  client OAuthClient @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([clientId, expiresAt])
 }
 
 model VoucherBatch {
