@@ -1,15 +1,18 @@
 import { PrismaClient, OrganizerStatus, EventStatus } from '@prisma/client';
+import * as bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
 
 async function main() {
+  const passwordHash = await bcrypt.hash('Password123!', 12);
   const owner = await prisma.user.upsert({
     where: { email: 'owner@livenation.ng' },
-    update: {},
+    update: { passwordHash },
     create: {
       email: 'owner@livenation.ng',
       phone: '+2348012345678',
       name: 'Adaeze Okonkwo',
+      passwordHash,
     },
   });
 

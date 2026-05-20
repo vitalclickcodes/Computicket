@@ -82,14 +82,29 @@ docs/         Architecture, roadmap, payments, organizers, API, brand
 - **Scan endpoint** with one-shot replay protection (second scan returns `already_scanned`)
 - Marketplace home, event listing, event detail with **live checkout form** (redirects to Paystack)
 - `/checkout/return` page that shows issued tickets and QRs after payment
+- **Inventory holds** — per-tier `held` counter, atomic raw-SQL claim that
+  rejects overselling under concurrent buyers
+- **Order expiry cron** — releases held inventory from abandoned pending
+  orders every minute (race-safe via conditional updates)
+- **Buyer email** — Postmark transport (logs to stdout in dev) with
+  HTML body containing each ticket's QR inlined as a data URI
+- **Auth** — email/password signup + signin, JWT bearer tokens,
+  `JwtAuthGuard` and `OrganizerMemberGuard`. Protected: POST
+  `/organizers`, POST `/events`, POST `/events/:slug/publish`,
+  dashboard endpoints
+- **Organizer dashboard UI** — sign in/up, organizer switcher, per-org
+  page with sales stats (sold, revenue, paid orders), inline
+  multi-tier event creation form, draft/publish toggle
 - Swagger docs auto-generated at `/docs`
-- Tests: webhook signature verification suite
+- Tests: webhook signature verification, order expiry race-loss case
 - CI: typecheck + build against Postgres
 
 ## Next up
 
-- Organizer dashboard UI (sign in, create event, view sales, refunds)
 - Scanner app (Flutter) — offline cache + replay protection at the gate
-- Email/SMS confirmations (Postmark + Termii)
-- Public API auth (API keys), outbound webhooks for organizers, embeddable checkout widget
+- Refunds: Paystack refunds API + REFUNDED state + void tickets
+- Email confirmations: branded templates, Termii SMS for Nigeria
+- Public API: per-organizer API keys + outbound webhooks + embeddable
+  checkout widget
+- Paystack split payments wired to organizer sub-accounts
 - Bus travel vertical

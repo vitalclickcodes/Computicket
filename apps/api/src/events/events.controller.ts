@@ -1,5 +1,5 @@
-import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
   ArrayMinSize,
@@ -13,6 +13,8 @@ import {
   MinLength,
   ValidateNested,
 } from 'class-validator';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { OrganizerMemberGuard } from '../auth/organizer-member.guard';
 import { EventsService } from './events.service';
 
 class TicketTypeDto {
@@ -39,6 +41,8 @@ class CreateEventDto {
 export class EventsController {
   constructor(private readonly events: EventsService) {}
 
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, OrganizerMemberGuard)
   @Post()
   create(@Body() dto: CreateEventDto) {
     return this.events.create(dto);
@@ -62,6 +66,8 @@ export class EventsController {
     return this.events.findBySlug(slug);
   }
 
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, OrganizerMemberGuard)
   @Post(':slug/publish')
   publish(@Param('slug') slug: string) {
     return this.events.publish(slug);

@@ -1,0 +1,81 @@
+'use client';
+
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { useState } from 'react';
+import { api } from '@/lib/api';
+import { setToken } from '@/lib/auth';
+
+export default function SignUpPage() {
+  const router = useRouter();
+  const [email, setEmail] = useState('');
+  const [name, setName] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setSubmitting(true);
+    try {
+      const res = await api.signup({ email, password, name: name || undefined });
+      setToken(res.token);
+      router.push('/dashboard');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Sign up failed');
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="max-w-md mx-auto px-4 py-16">
+      <h1 className="text-2xl font-bold">Create an account</h1>
+      <p className="mt-2 text-sm text-gray-600">
+        Start selling tickets in minutes.
+      </p>
+
+      <form onSubmit={handleSubmit} className="mt-8 space-y-4">
+        <input
+          type="text"
+          placeholder="Your name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          className="w-full border border-gray-300 rounded-md px-3 py-2"
+        />
+        <input
+          type="email"
+          required
+          placeholder="Email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          className="w-full border border-gray-300 rounded-md px-3 py-2"
+        />
+        <input
+          type="password"
+          required
+          minLength={8}
+          placeholder="Password (8+ characters)"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          className="w-full border border-gray-300 rounded-md px-3 py-2"
+        />
+        {error && <div className="text-sm text-red-600">{error}</div>}
+        <button
+          type="submit"
+          disabled={submitting}
+          className="w-full bg-brand text-white font-medium py-2.5 rounded-md hover:bg-brand-dark disabled:bg-gray-300"
+        >
+          {submitting ? 'Creating…' : 'Create account'}
+        </button>
+      </form>
+
+      <p className="mt-6 text-sm text-gray-600">
+        Already have an account?{' '}
+        <Link href="/dashboard/signin" className="text-brand hover:underline">
+          Sign in
+        </Link>
+      </p>
+    </div>
+  );
+}
