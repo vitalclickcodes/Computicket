@@ -151,6 +151,47 @@ model Organizer {
   promoCodes       PromoCode[]
   busRoutes        BusRoute[]
   affiliateLinks   AffiliateLink[]
+  hotels           Hotel[]
+  flights          Flight[]
+}
+
+model Hotel {
+  id              String   @id @default(cuid())
+  organizerId     String
+  slug            String   @unique
+  name            String
+  description     String?
+  city            String
+  address         String
+  pricePerNightKobo Int
+  capacity        Int
+  active          Boolean  @default(true)
+  createdAt       DateTime @default(now())
+
+  organizer Organizer @relation(fields: [organizerId], references: [id], onDelete: Cascade)
+
+  @@index([city, active])
+}
+
+model Flight {
+  id           String   @id @default(cuid())
+  organizerId  String
+  flightNumber String
+  airline      String
+  fromAirport  String
+  toAirport    String
+  departsAt    DateTime
+  arrivesAt    DateTime
+  priceKobo    Int
+  capacity     Int
+  sold         Int      @default(0)
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+
+  organizer Organizer @relation(fields: [organizerId], references: [id], onDelete: Cascade)
+
+  @@index([fromAirport, toAirport, departsAt])
+  @@index([organizerId])
 }
 
 model AffiliateLink {

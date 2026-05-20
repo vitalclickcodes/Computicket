@@ -24,6 +24,7 @@ import { WalletModule } from './wallet/wallet.module';
 import { SeatingModule } from './seating/seating.module';
 import { AddOnsModule } from './add-ons/add-ons.module';
 import { MarketingModule } from './marketing/marketing.module';
+import { LodgingModule } from './lodging/lodging.module';
 
 @Module({
   imports: [
@@ -52,6 +53,7 @@ import { MarketingModule } from './marketing/marketing.module';
     SeatingModule,
     AddOnsModule,
     MarketingModule,
+    LodgingModule,
   ],
 })
 export class AppModule {}

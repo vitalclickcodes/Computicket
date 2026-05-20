@@ -174,6 +174,71 @@ async function main() {
     });
   }
 
+  // Hotels and flights — Phase 2 stubs. Inventory is mocked; real
+  // integration with airline GDSes and hotel PMSes will replace these.
+  await prisma.hotel.upsert({
+    where: { slug: 'eko-hotels-lagos' },
+    update: {},
+    create: {
+      slug: 'eko-hotels-lagos',
+      organizerId: organizer.id,
+      name: 'Eko Hotels & Suites',
+      description: 'Five-star Lagos waterfront. Beach, pools, multiple restaurants.',
+      city: 'Lagos',
+      address: 'Plot 1415 Adetokunbo Ademola Street, Victoria Island, Lagos',
+      pricePerNightKobo: 12500000, // NGN 125,000
+      capacity: 20,
+    },
+  });
+  await prisma.hotel.upsert({
+    where: { slug: 'transcorp-hilton-abuja' },
+    update: {},
+    create: {
+      slug: 'transcorp-hilton-abuja',
+      organizerId: organizer.id,
+      name: 'Transcorp Hilton Abuja',
+      description: 'Iconic luxury hotel in the heart of Abuja.',
+      city: 'Abuja',
+      address: '1 Aguiyi Ironsi Street, Maitama, Abuja',
+      pricePerNightKobo: 18000000, // NGN 180,000
+      capacity: 30,
+    },
+  });
+
+  const flightsToSeed = [
+    {
+      airline: 'Air Peace', flightNumber: 'P47100', fromAirport: 'LOS', toAirport: 'ABV',
+      daysFromNow: 2, hour: 7, durationMinutes: 75, priceKobo: 8500000, capacity: 120,
+    },
+    {
+      airline: 'Ibom Air', flightNumber: 'QI201', fromAirport: 'LOS', toAirport: 'ABV',
+      daysFromNow: 2, hour: 14, durationMinutes: 80, priceKobo: 7800000, capacity: 90,
+    },
+    {
+      airline: 'United Nigeria', flightNumber: 'NG203', fromAirport: 'LOS', toAirport: 'PHC',
+      daysFromNow: 3, hour: 9, durationMinutes: 70, priceKobo: 6500000, capacity: 100,
+    },
+  ];
+  for (const f of flightsToSeed) {
+    const departsAt = new Date();
+    departsAt.setUTCDate(departsAt.getUTCDate() + f.daysFromNow);
+    departsAt.setUTCHours(f.hour, 0, 0, 0);
+    const arrivesAt = new Date(departsAt.getTime() + f.durationMinutes * 60_000);
+    await prisma.flight.create({
+      data: {
+        organizerId: organizer.id,
+        airline: f.airline,
+        flightNumber: f.flightNumber,
+        fromAirport: f.fromAirport,
+        toAirport: f.toAirport,
+        departsAt,
+        arrivesAt,
+        priceKobo: f.priceKobo,
+        capacity: f.capacity,
+      },
+    });
+  }
+
   console.log('Seed complete.');
 }
 
