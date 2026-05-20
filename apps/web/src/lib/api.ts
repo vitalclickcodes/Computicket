@@ -155,6 +155,7 @@ export interface DashboardOrder {
   buyerEmail: string;
   buyerName: string | null;
   totalKobo: number;
+  refundedKobo: number;
   paystackRef: string;
   paidAt: string | null;
   ticketCount: number;
@@ -467,14 +468,24 @@ export const api = {
       { method: 'PATCH', token, body: JSON.stringify({ notes }) },
     ),
 
-  refundOrder: (token: string, orderId: string) =>
+  refundOrder: (
+    token: string,
+    orderId: string,
+    body?: { amountKobo?: number; reason?: string },
+  ) =>
     request<{
       orderId: string;
-      status: 'REFUNDED';
+      refundId?: string;
+      status: 'REFUNDED' | 'PARTIAL';
       refundedAmountKobo: number;
-      voidedTickets: number;
+      remainingKobo: number;
+      partial: boolean;
       alreadyRefunded: boolean;
-    }>(`/dashboard/orders/${orderId}/refund`, { method: 'POST', token }),
+    }>(`/dashboard/orders/${orderId}/refund`, {
+      method: 'POST',
+      token,
+      body: JSON.stringify(body ?? {}),
+    }),
 };
 
 export function ticketQrUrl(code: string): string {

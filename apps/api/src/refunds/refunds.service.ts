@@ -9,6 +9,13 @@ import { PaystackService } from '../payments/paystack.service';
 import { MailerService } from '../mail/mailer.service';
 import { WebhookDispatcher } from '../developers/webhook-dispatcher.service';
 
+interface RefundInput {
+  orderId: string;
+  amountKobo?: number; // omit for full refund of remaining balance
+  reason?: string;
+  initiatedById?: string;
+}
+
 @Injectable()
 export class RefundsService {
   private readonly logger = new Logger(RefundsService.name);
@@ -20,35 +27,24 @@ export class RefundsService {
     private readonly outbound: WebhookDispatcher,
   ) {}
 
-  async refund(orderId: string): Promise<{
-    orderId: string;
-    status: 'REFUNDED';
-    refundedAmountKobo: number;
-    voidedTickets: number;
-    alreadyRefunded: boolean;
-  }> {
+  async refund(input: RefundInput) {
     const order = await this.prisma.order.findUnique({
-      where: { id: orderId },
+      where: { id: input.orderId },
       include: {
         items: true,
         event: {
-          select: {
-            title: true,
-            venue: true,
-            city: true,
-            startsAt: true,
-            organizerId: true,
-          },
+          select: { title: true, organizerId: true },
         },
       },
     });
-    if (!order) throw new NotFoundException(`Order ${orderId} not found`);
+    if (!order) throw new NotFoundException('Order not found');
     if (order.status === 'REFUNDED') {
       return {
         orderId: order.id,
-        status: 'REFUNDED',
-        refundedAmountKobo: order.totalKobo,
-        voidedTickets: 0,
+        status: 'REFUNDED' as const,
+        refundedAmountKobo: order.refundedKobo,
+        remainingKobo: 0,
+        partial: false,
         alreadyRefunded: true,
       };
     }
@@ -61,21 +57,74 @@ export class RefundsService {
       throw new BadRequestException('Order has no Paystack reference');
     }
 
-    // Call Paystack first — if this fails we want no DB mutation.
-    await this.paystack.refund(order.paystackRef, order.totalKobo);
+    const remaining = order.totalKobo - order.refundedKobo;
+    const amount = input.amountKobo ?? remaining;
+    if (amount <= 0) throw new BadRequestException('Refund amount must be positive');
+    if (amount > remaining) {
+      throw new BadRequestException(
+        `Refund exceeds remaining refundable balance (${remaining} kobo)`,
+      );
+    }
 
-    // Apply state change atomically. Conditional update prevents a
-    // concurrent second refund call from double-running this branch.
+    const isFinal = amount === remaining;
+
+    // Record the refund attempt first (PENDING) so we can correlate the
+    // async Paystack refund webhook when it arrives.
+    const refund = await this.prisma.refund.create({
+      data: {
+        orderId: order.id,
+        amountKobo: amount,
+        reason: input.reason,
+        initiatedById: input.initiatedById,
+      },
+    });
+
+    try {
+      const result = await this.paystack.refund(order.paystackRef, amount);
+      await this.prisma.refund.update({
+        where: { id: refund.id },
+        data: {
+          status: result.status === 'failed' ? 'FAILED' : 'PROCESSED',
+          paystackRefundId: result.refundId,
+          processedAt: result.status === 'failed' ? null : new Date(),
+        },
+      });
+      if (result.status === 'failed') {
+        throw new BadRequestException('Refund declined by payment provider');
+      }
+    } catch (e) {
+      await this.prisma.refund.update({
+        where: { id: refund.id },
+        data: { status: 'FAILED' },
+      });
+      throw e;
+    }
+
+    // Apply state changes atomically.
     const result = await this.prisma.$transaction(async (tx) => {
+      // Bump refundedKobo via conditional update so concurrent partials
+      // never over-refund.
       const claim = await tx.order.updateMany({
-        where: { id: order.id, status: 'PAID' },
-        data: { status: 'REFUNDED' },
+        where: { id: order.id, refundedKobo: { lte: order.totalKobo - amount } },
+        data: { refundedKobo: { increment: amount } },
       });
       if (claim.count === 0) {
-        return { voided: 0, alreadyRefunded: true };
+        // Someone else processed a partial in the meantime; the refund row
+        // is already PROCESSED — leave it for reconciliation rather than
+        // unwinding the Paystack-side debit.
+        this.logger.warn(
+          `Refund ${refund.id} processed at Paystack but lost the local race; reconcile`,
+        );
+        return { voided: 0, becameFinal: false };
       }
 
-      // Release inventory and void tickets.
+      if (!isFinal) return { voided: 0, becameFinal: false };
+
+      // Final refund: flip status, void tickets, release sold counter.
+      await tx.order.update({
+        where: { id: order.id },
+        data: { status: 'REFUNDED' },
+      });
       for (const item of order.items) {
         await tx.ticketType.update({
           where: { id: item.ticketTypeId },
@@ -86,10 +135,11 @@ export class RefundsService {
         where: { orderId: order.id, status: { in: ['ISSUED', 'SCANNED'] } },
         data: { status: 'VOIDED' },
       });
-      return { voided: voided.count, alreadyRefunded: false };
+      return { voided: voided.count, becameFinal: true };
     });
 
-    if (!result.alreadyRefunded) {
+    // Outbound webhook + buyer email (only on becoming final).
+    if (result.becameFinal) {
       this.outbound
         .dispatch({
           organizerId: order.event.organizerId,
@@ -102,7 +152,6 @@ export class RefundsService {
           },
         })
         .catch((e) => this.logger.error(`Outbound dispatch failed: ${e.message}`));
-
       try {
         await this.mailer.sendRefundNotification({
           to: order.buyerEmail,
@@ -117,10 +166,24 @@ export class RefundsService {
 
     return {
       orderId: order.id,
-      status: 'REFUNDED',
-      refundedAmountKobo: order.totalKobo,
-      voidedTickets: result.voided,
-      alreadyRefunded: result.alreadyRefunded,
+      refundId: refund.id,
+      status: isFinal ? ('REFUNDED' as const) : ('PARTIAL' as const),
+      refundedAmountKobo: order.refundedKobo + amount,
+      remainingKobo: remaining - amount,
+      partial: !isFinal,
+      alreadyRefunded: false,
     };
+  }
+
+  /**
+   * Called by the Paystack refund webhook handler. Marks a tracked
+   * refund as PROCESSED. Idempotent.
+   */
+  async markPaystackRefundProcessed(paystackRefundId: string) {
+    const updated = await this.prisma.refund.updateMany({
+      where: { paystackRefundId, status: { not: 'PROCESSED' } },
+      data: { status: 'PROCESSED', processedAt: new Date() },
+    });
+    return { updated: updated.count };
   }
 }

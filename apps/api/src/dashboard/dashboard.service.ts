@@ -30,6 +30,7 @@ export class DashboardService {
         buyerEmail: o.buyerEmail,
         buyerName: o.buyerName,
         totalKobo: o.totalKobo,
+        refundedKobo: o.refundedKobo,
         paystackRef: o.paystackRef,
         paidAt: o.paidAt,
         ticketCount: o._count.tickets,

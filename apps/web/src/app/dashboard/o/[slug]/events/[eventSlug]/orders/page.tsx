@@ -36,18 +36,29 @@ export default function EventOrdersPage() {
     load();
   }, [load]);
 
-  async function refund(orderId: string, buyerEmail: string, totalKobo: number) {
-    if (
-      !confirm(
-        `Refund ${formatNgn(totalKobo)} to ${buyerEmail}? This will void all tickets on the order.`,
-      )
-    ) {
-      return;
+  async function refund(orderId: string, buyerEmail: string, remainingKobo: number) {
+    const input = prompt(
+      `Refund amount in NGN for ${buyerEmail} (max ${formatNgn(remainingKobo)}). Leave blank for full refund.`,
+      '',
+    );
+    if (input === null) return; // cancelled
+    let amountKobo: number | undefined;
+    if (input.trim() !== '') {
+      const ngn = parseFloat(input);
+      if (!isFinite(ngn) || ngn <= 0) {
+        alert('Enter a positive number, or leave blank.');
+        return;
+      }
+      amountKobo = Math.round(ngn * 100);
+      if (amountKobo > remainingKobo) {
+        alert(`Amount exceeds remaining refundable balance (${formatNgn(remainingKobo)}).`);
+        return;
+      }
     }
     setRefundingId(orderId);
     try {
       const token = getToken()!;
-      await api.refundOrder(token, orderId);
+      await api.refundOrder(token, orderId, amountKobo !== undefined ? { amountKobo } : undefined);
       await load();
     } catch (e) {
       alert(e instanceof Error ? e.message : 'Refund failed');
@@ -108,21 +119,26 @@ export default function EventOrdersPage() {
                     ))}
                   </ul>
                 </td>
-                <td className="py-3 text-right font-semibold">{formatNgn(o.totalKobo)}</td>
+                <td className="py-3 text-right">
+                  <div className="font-semibold">{formatNgn(o.totalKobo)}</div>
+                  {o.refundedKobo > 0 && (
+                    <div className="text-xs text-amber-700">−{formatNgn(o.refundedKobo)} refunded</div>
+                  )}
+                </td>
                 <td className="py-3">
                   <span className={statusBadge(o.status)}>{o.status}</span>
                 </td>
                 <td className="py-3 text-right">
-                  {o.status === 'PAID' ? (
+                  {o.status === 'PAID' && o.totalKobo > o.refundedKobo ? (
                     <button
-                      onClick={() => refund(o.id, o.buyerEmail, o.totalKobo)}
+                      onClick={() => refund(o.id, o.buyerEmail, o.totalKobo - o.refundedKobo)}
                       disabled={refundingId === o.id}
                       className="text-red-600 hover:underline disabled:text-gray-400"
                     >
                       {refundingId === o.id ? 'Refunding…' : 'Refund'}
                     </button>
                   ) : (
-                    <span className="text-gray-400">refunded</span>
+                    <span className="text-gray-400">{o.status === 'REFUNDED' ? 'refunded' : 'no balance'}</span>
                   )}
                 </td>
               </tr>

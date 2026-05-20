@@ -12,6 +12,7 @@ describe('WebhooksService.verifyPaystackSignature', () => {
       {} as never,
       {} as never,
       {} as never,
+      {} as never,
     );
   });
 

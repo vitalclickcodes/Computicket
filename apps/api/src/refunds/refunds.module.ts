@@ -8,5 +8,6 @@ import { RefundsService } from './refunds.service';
   imports: [AuthModule, DevelopersModule],
   controllers: [RefundsController],
   providers: [RefundsService],
+  exports: [RefundsService],
 })
 export class RefundsModule {}

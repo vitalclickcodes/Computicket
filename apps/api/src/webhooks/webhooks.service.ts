@@ -4,6 +4,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { TicketsService } from '../tickets/tickets.service';
 import { MailerService } from '../mail/mailer.service';
 import { WebhookDispatcher } from '../developers/webhook-dispatcher.service';
+import { RefundsService } from '../refunds/refunds.service';
 
 interface PaystackChargeSuccess {
   event: 'charge.success';
@@ -23,6 +24,7 @@ export class WebhooksService {
     private readonly tickets: TicketsService,
     private readonly mailer: MailerService,
     private readonly outbound: WebhookDispatcher,
+    private readonly refunds: RefundsService,
   ) {}
 
   verifyPaystackSignature(rawBody: Buffer, signature: string | undefined): boolean {
@@ -38,6 +40,13 @@ export class WebhooksService {
   async handlePaystackEvent(payload: PaystackEvent) {
     if (payload.event === 'charge.success') {
       return this.handleChargeSuccess(payload as PaystackChargeSuccess);
+    }
+    if (payload.event === 'refund.processed') {
+      const data = (payload as { data: { id?: string | number } }).data;
+      const refundId = data.id !== undefined ? String(data.id) : undefined;
+      if (!refundId) return { handled: false, reason: 'no_refund_id' as const };
+      const r = await this.refunds.markPaystackRefundProcessed(refundId);
+      return { handled: true, updated: r.updated };
     }
     this.logger.log(`Ignoring Paystack event: ${payload.event}`);
     return { handled: false, reason: 'unsupported_event' as const };

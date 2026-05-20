@@ -250,6 +250,7 @@ model Order {
   promoCode       String?
   feeKobo         Int         @default(0)
   totalKobo       Int
+  refundedKobo    Int         @default(0)
   paystackRef     String?     @unique
   paidAt          DateTime?
   expiresAt       DateTime
@@ -260,8 +261,31 @@ model Order {
   event   Event       @relation(fields: [eventId], references: [id])
   items   OrderItem[]
   tickets Ticket[]
+  refunds Refund[]
 
   @@index([status, createdAt])
+}
+
+enum RefundStatus {
+  PENDING
+  PROCESSED
+  FAILED
+}
+
+model Refund {
+  id                String       @id @default(cuid())
+  orderId           String
+  amountKobo        Int
+  status            RefundStatus @default(PENDING)
+  paystackRefundId  String?
+  reason            String?
+  createdAt         DateTime     @default(now())
+  processedAt       DateTime?
+  initiatedById     String?
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
 }
 
 model OrderItem {
