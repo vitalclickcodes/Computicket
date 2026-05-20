@@ -13,6 +13,7 @@ export function BuyForm({ event }: Props) {
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
+  const [promoCode, setPromoCode] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [signedIn, setSignedIn] = useState(false);
@@ -56,6 +57,7 @@ export function BuyForm({ event }: Props) {
           eventSlug: event.slug,
           buyerEmail: email,
           buyerName: name || undefined,
+          promoCode: promoCode.trim() || undefined,
           callbackUrl: `${origin}/checkout/return`,
           items: items.map((i) => ({ ticketTypeId: i.tt.id, quantity: i.qty })),
         },
@@ -133,6 +135,14 @@ export function BuyForm({ event }: Props) {
           className="border border-gray-300 rounded-md px-3 py-2"
         />
       </div>
+
+      <input
+        type="text"
+        placeholder="Promo code (optional)"
+        value={promoCode}
+        onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
+        className="mt-3 w-full border border-gray-300 rounded-md px-3 py-2 font-mono text-sm uppercase"
+      />
 
       {signedIn && (
         <p className="mt-3 text-xs text-gray-500">

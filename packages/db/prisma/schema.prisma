@@ -69,6 +69,35 @@ model Organizer {
   events           Event[]
   apiKeys          ApiKey[]
   webhookEndpoints WebhookEndpoint[]
+  promoCodes       PromoCode[]
+}
+
+enum PromoCodeType {
+  PERCENTAGE
+  FIXED
+}
+
+model PromoCode {
+  id           String        @id @default(cuid())
+  organizerId  String
+  // Optional: scope the code to a specific event. NULL = applies to any
+  // event owned by this organizer.
+  eventId      String?
+  code         String
+  type         PromoCodeType
+  // PERCENTAGE: basis points (1000 = 10%). FIXED: kobo amount off subtotal.
+  value        Int
+  maxUses      Int?
+  usesCount    Int           @default(0)
+  expiresAt    DateTime?
+  active       Boolean       @default(true)
+  createdAt    DateTime      @default(now())
+
+  organizer Organizer @relation(fields: [organizerId], references: [id], onDelete: Cascade)
+  event     Event?    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@unique([organizerId, code])
+  @@index([organizerId])
 }
 
 model ApiKey {
@@ -143,6 +172,7 @@ model Event {
   organizer   Organizer    @relation(fields: [organizerId], references: [id])
   ticketTypes TicketType[]
   orders      Order[]
+  promoCodes  PromoCode[]
 
   @@index([status, startsAt])
   @@index([organizerId])
@@ -186,6 +216,8 @@ model Order {
   buyerName       String?
   status          OrderStatus @default(PENDING)
   subtotalKobo    Int
+  discountKobo    Int         @default(0)
+  promoCode       String?
   feeKobo         Int         @default(0)
   totalKobo       Int
   paystackRef     String?     @unique

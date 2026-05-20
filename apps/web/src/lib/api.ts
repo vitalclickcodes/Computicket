@@ -176,6 +176,7 @@ export const api = {
     buyerName?: string;
     buyerPhone?: string;
     callbackUrl?: string;
+    promoCode?: string;
     items: Array<{ ticketTypeId: string; quantity: number }>;
   }, token?: string) =>
     request<CreateOrderResponse>('/orders', {
@@ -261,6 +262,41 @@ export const api = {
   removeTeamMember: (token: string, organizerSlug: string, memberId: string) =>
     request<{ id: string; removed: true }>(
       `/dashboard/organizers/${organizerSlug}/members/${memberId}`,
+      { method: 'DELETE', token },
+    ),
+
+  listPromoCodes: (token: string, organizerSlug: string) =>
+    request<Array<{
+      id: string;
+      code: string;
+      type: 'PERCENTAGE' | 'FIXED';
+      value: number;
+      maxUses: number | null;
+      usesCount: number;
+      expiresAt: string | null;
+      active: boolean;
+      createdAt: string;
+      event: { slug: string; title: string } | null;
+    }>>(`/dashboard/organizers/${organizerSlug}/promo-codes`, { token }),
+  createPromoCode: (
+    token: string,
+    organizerSlug: string,
+    body: {
+      code: string;
+      type: 'PERCENTAGE' | 'FIXED';
+      value: number;
+      eventSlug?: string;
+      maxUses?: number;
+      expiresAt?: string;
+    },
+  ) =>
+    request<{ id: string; code: string }>(
+      `/dashboard/organizers/${organizerSlug}/promo-codes`,
+      { method: 'POST', token, body: JSON.stringify(body) },
+    ),
+  deactivatePromoCode: (token: string, organizerSlug: string, id: string) =>
+    request<{ id: string; active: false }>(
+      `/dashboard/organizers/${organizerSlug}/promo-codes/${id}`,
       { method: 'DELETE', token },
     ),
   listEventOrders: (token: string, organizerSlug: string, eventSlug: string) =>

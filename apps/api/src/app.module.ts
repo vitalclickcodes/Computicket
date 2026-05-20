@@ -18,6 +18,7 @@ import { DevelopersModule } from './developers/developers.module';
 import { AccountModule } from './account/account.module';
 import { AdminModule } from './admin/admin.module';
 import { TeamModule } from './team/team.module';
+import { PromoCodesModule } from './promo-codes/promo-codes.module';
 
 @Module({
   imports: [
@@ -40,6 +41,7 @@ import { TeamModule } from './team/team.module';
     AccountModule,
     AdminModule,
     TeamModule,
+    PromoCodesModule,
   ],
 })
 export class AppModule {}

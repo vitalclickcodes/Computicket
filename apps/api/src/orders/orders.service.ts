@@ -7,6 +7,7 @@ import { randomBytes } from 'crypto';
 import { Prisma } from '@computicket/db';
 import { PrismaService } from '../prisma/prisma.service';
 import { PaystackService } from '../payments/paystack.service';
+import { PromoCodesService } from '../promo-codes/promo-codes.service';
 
 interface CreateOrderInput {
   eventSlug: string;
@@ -16,6 +17,7 @@ interface CreateOrderInput {
   items: Array<{ ticketTypeId: string; quantity: number }>;
   callbackUrl?: string;
   userId?: string;
+  promoCode?: string;
 }
 
 const HOLD_MINUTES = 15;
@@ -25,6 +27,7 @@ export class OrdersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly paystack: PaystackService,
+    private readonly promos: PromoCodesService,
   ) {}
 
   async create(input: CreateOrderInput) {
@@ -71,8 +74,21 @@ export class OrdersService {
         });
       }
 
-      const fee = Math.round(subtotal * 0.015);
-      const total = subtotal + fee;
+      // Apply promo code (if any) — validate, atomically claim, compute discount.
+      let discount = 0;
+      let promoCodeStored: string | undefined;
+      if (input.promoCode) {
+        const promo = await this.promos.findUsable(event.id, input.promoCode);
+        if (!promo) throw new BadRequestException('Invalid or expired promo code');
+        const claimed = await this.promos.claim(promo.id);
+        if (!claimed) throw new BadRequestException('Promo code is no longer available');
+        discount = this.promos.computeDiscount(subtotal, promo.type, promo.value);
+        promoCodeStored = input.promoCode.trim().toUpperCase();
+      }
+
+      const subtotalAfterDiscount = subtotal - discount;
+      const fee = Math.round(subtotalAfterDiscount * 0.015);
+      const total = subtotalAfterDiscount + fee;
 
       return tx.order.create({
         data: {
@@ -82,6 +98,8 @@ export class OrdersService {
           buyerName: input.buyerName,
           buyerPhone: input.buyerPhone,
           subtotalKobo: subtotal,
+          discountKobo: discount,
+          promoCode: promoCodeStored,
           feeKobo: fee,
           totalKobo: total,
           expiresAt: new Date(Date.now() + HOLD_MINUTES * 60_000),
