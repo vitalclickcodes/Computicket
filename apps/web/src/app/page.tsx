@@ -35,6 +35,7 @@ export default async function HomePage() {
           <Link href="/events" className="text-sm text-brand hover:underline">View all →</Link>
         </div>
 
+
         {error && (
           <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
             Can&apos;t reach the API yet ({error}). Start it with <code>pnpm dev</code>.
@@ -61,6 +62,41 @@ export default async function HomePage() {
             );
           })}
         </ul>
+      </section>
+
+      <section className="bg-gray-50 border-t border-gray-200">
+        <div className="max-w-6xl mx-auto px-4 py-14 grid md:grid-cols-[1.2fr,1fr] gap-10 items-center">
+          <div>
+            <p className="text-sm uppercase tracking-wide text-brand font-medium">For organizers</p>
+            <h2 className="mt-2 text-2xl md:text-3xl font-bold">
+              An event management app like Computicket is essential for modern event planning.
+            </h2>
+            <p className="mt-3 text-gray-700 leading-relaxed">
+              It centralizes control, automates ticket sales, and provides real-time analytics —
+              saving you time and maximizing revenue.
+            </p>
+            <Link
+              href="/for-organizers"
+              className="inline-block mt-5 bg-brand text-white font-medium px-5 py-2.5 rounded-md hover:bg-brand-dark"
+            >
+              See how it works
+            </Link>
+          </div>
+          <ul className="space-y-3 text-sm">
+            <li className="flex gap-3">
+              <span className="text-brand">●</span>
+              <span><strong>Centralized control</strong> — events, ticket tiers, refunds, scanning, payouts in one dashboard.</span>
+            </li>
+            <li className="flex gap-3">
+              <span className="text-brand">●</span>
+              <span><strong>Automated sales</strong> — Paystack checkout, atomic inventory holds, direct settlement to your bank.</span>
+            </li>
+            <li className="flex gap-3">
+              <span className="text-brand">●</span>
+              <span><strong>Real-time analytics</strong> — sold counts, revenue, paid orders, all live as money lands.</span>
+            </li>
+          </ul>
+        </div>
       </section>
     </div>
   );
