@@ -29,6 +29,23 @@ export class WalletService {
     private readonly paystack: PaystackService,
   ) {}
 
+  async submitKyc(
+    userId: string,
+    input: { bvn: string; idNumber: string; idDocumentUrl?: string },
+  ) {
+    if (!/^\d{11}$/.test(input.bvn)) throw new BadRequestException('BVN must be 11 digits');
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        kycBvn: input.bvn,
+        kycIdNumber: input.idNumber,
+        kycIdDocumentUrl: input.idDocumentUrl,
+        kycSubmittedAt: new Date(),
+      },
+      select: { id: true, kycTier: true, kycSubmittedAt: true },
+    });
+  }
+
   async getBalance(userId: string) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
@@ -113,6 +130,18 @@ export class WalletService {
   ) {
     if (input.amountKobo < 10000) {
       throw new BadRequestException('Minimum top-up is NGN 100');
+    }
+    // Tier caps: NONE = NGN 50K, BASIC = NGN 500K, VERIFIED = unlimited
+    const user = await this.prisma.user.findUniqueOrThrow({
+      where: { id: userId },
+      select: { kycTier: true },
+    });
+    const capKobo =
+      user.kycTier === 'VERIFIED' ? Infinity : user.kycTier === 'BASIC' ? 50_000_000 : 5_000_000;
+    if (input.amountKobo > capKobo) {
+      throw new BadRequestException(
+        `Top-up exceeds your tier cap (NGN ${(capKobo / 100).toLocaleString()}). Submit KYC to raise it.`,
+      );
     }
     const reference = `wallet_${randomBytes(8).toString('hex')}`;
     const topUp = await this.prisma.walletTopUp.create({

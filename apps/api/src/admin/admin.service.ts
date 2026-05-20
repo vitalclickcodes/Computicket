@@ -82,6 +82,28 @@ export class AdminService {
     });
   }
 
+  async listPendingKyc() {
+    return this.prisma.user.findMany({
+      where: { kycSubmittedAt: { not: null }, kycVerifiedAt: null },
+      orderBy: { kycSubmittedAt: 'asc' },
+      select: {
+        id: true, email: true, name: true, kycBvn: true, kycIdNumber: true,
+        kycIdDocumentUrl: true, kycSubmittedAt: true, kycTier: true,
+      },
+    });
+  }
+
+  async setKycTier(userId: string, tier: 'NONE' | 'BASIC' | 'VERIFIED') {
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        kycTier: tier,
+        kycVerifiedAt: tier === 'NONE' ? null : new Date(),
+      },
+      select: { id: true, kycTier: true, kycVerifiedAt: true },
+    });
+  }
+
   async platformStats() {
     const [organizers, events, paidOrders, refundedOrders, totalGross] = await Promise.all([
       this.prisma.organizer.count(),

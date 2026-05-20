@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Param, Patch, Post, Req, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
-import { IsInt, IsString, Max, Min } from 'class-validator';
+import { IsEnum, IsInt, IsString, Max, Min } from 'class-validator';
 import type { Request } from 'express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { AdminGuard } from '../auth/admin.guard';
@@ -12,6 +12,10 @@ class SetCommissionDto {
 
 class SetKycNotesDto {
   @IsString() notes!: string;
+}
+
+class SetKycTierDto {
+  @IsEnum(['NONE', 'BASIC', 'VERIFIED']) tier!: 'NONE' | 'BASIC' | 'VERIFIED';
 }
 
 @ApiTags('admin')
@@ -49,5 +53,15 @@ export class AdminController {
   @Patch('organizers/:slug/kyc-notes')
   setKycNotes(@Param('slug') slug: string, @Body() dto: SetKycNotesDto) {
     return this.admin.setKycNotes(slug, dto.notes);
+  }
+
+  @Get('wallet-kyc')
+  listPendingKyc() {
+    return this.admin.listPendingKyc();
+  }
+
+  @Patch('users/:userId/kyc-tier')
+  setUserKycTier(@Param('userId') userId: string, @Body() dto: SetKycTierDto) {
+    return this.admin.setKycTier(userId, dto.tier);
   }
 }

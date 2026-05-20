@@ -11,6 +11,12 @@ class TopUpDto {
   @IsOptional() @IsString() callbackUrl?: string;
 }
 
+class SubmitKycDto {
+  @IsString() bvn!: string;
+  @IsString() idNumber!: string;
+  @IsOptional() @IsString() idDocumentUrl?: string;
+}
+
 @ApiTags('wallet')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
@@ -29,6 +35,11 @@ export class WalletController {
       this.wallet.listTransactions(userId),
     ]);
     return { balanceKobo, transactions };
+  }
+
+  @Post('kyc')
+  submitKyc(@Body() dto: SubmitKycDto, @Req() req: Request) {
+    return this.wallet.submitKyc(req.user!.id, dto);
   }
 
   @Post('top-ups')
