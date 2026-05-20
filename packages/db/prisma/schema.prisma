@@ -48,6 +48,7 @@ model User {
   walletTransactions WalletTransaction[]
   walletTopUps      WalletTopUp[]
   loyaltyTransactions LoyaltyTransaction[]
+  agentProfile      AgentProfile?
   referredBy        User?    @relation("UserReferrals", fields: [referredById], references: [id])
   referred          User[]   @relation("UserReferrals")
   referralsMade     Referral[] @relation("Referrer")
@@ -100,6 +101,20 @@ model WalletTransaction {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, createdAt])
+}
+
+model AgentProfile {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  agentCode       String   @unique
+  // Commission in basis points of order total (default 5%)
+  commissionBps   Int      @default(500)
+  active          Boolean  @default(true)
+  createdAt       DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([agentCode])
 }
 
 enum LoyaltyTxType {
@@ -561,6 +576,8 @@ model Order {
   refundedKobo    Int         @default(0)
   paidFromWallet  Boolean     @default(false)
   affiliateCode   String?
+  agentCode       String?
+  agentCommissionKobo Int     @default(0)
   loyaltyPointsRedeemed Int   @default(0)
   loyaltyPointsEarned   Int   @default(0)
   paystackRef     String?     @unique

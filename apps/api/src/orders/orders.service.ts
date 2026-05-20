@@ -13,6 +13,7 @@ import { TicketsService } from '../tickets/tickets.service';
 import { SeatingService } from '../seating/seating.service';
 import { AffiliateService } from '../marketing/affiliate.service';
 import { LoyaltyService } from '../loyalty/loyalty.service';
+import { AgentsService } from '../agents/agents.service';
 
 interface CreateOrderInput {
   eventSlug: string;
@@ -26,6 +27,7 @@ interface CreateOrderInput {
   promoCode?: string;
   payFromWallet?: boolean;
   affiliateCode?: string;
+  agentCode?: string;
   redeemLoyaltyPoints?: number;
 }
 
@@ -42,6 +44,7 @@ export class OrdersService {
     private readonly seating: SeatingService,
     private readonly affiliate: AffiliateService,
     private readonly loyalty: LoyaltyService,
+    private readonly agents: AgentsService,
   ) {}
 
   async create(input: CreateOrderInput) {
@@ -138,6 +141,20 @@ export class OrdersService {
         if (link) affiliateCodeStored = link.code;
       }
 
+      // Agent attribution + commission. Unknown/inactive codes drop silently.
+      let agentCodeStored: string | undefined;
+      let agentCommissionKobo = 0;
+      let agentUserId: string | undefined;
+      let agentCommissionBps = 0;
+      if (input.agentCode) {
+        const agent = await this.agents.resolveAgentCode(input.agentCode);
+        if (agent) {
+          agentCodeStored = agent.agentCode;
+          agentUserId = agent.userId;
+          agentCommissionBps = agent.commissionBps;
+        }
+      }
+
       // Loyalty points redemption — must be authed and have sufficient balance.
       let loyaltyPointsRedeemed = 0;
       let loyaltyDiscount = 0;
@@ -157,6 +174,9 @@ export class OrdersService {
       const subtotalAfterDiscount = Math.max(0, subtotal - discount - loyaltyDiscount);
       const fee = Math.round(subtotalAfterDiscount * 0.015);
       const total = subtotalAfterDiscount + fee;
+      if (agentCommissionBps > 0) {
+        agentCommissionKobo = Math.floor((total * agentCommissionBps) / 10000);
+      }
 
       const created = await tx.order.create({
         data: {
@@ -172,6 +192,8 @@ export class OrdersService {
           totalKobo: total,
           paidFromWallet: input.payFromWallet ?? false,
           affiliateCode: affiliateCodeStored,
+          agentCode: agentCodeStored,
+          agentCommissionKobo,
           loyaltyPointsRedeemed,
           expiresAt: new Date(Date.now() + HOLD_MINUTES * 60_000),
           paystackRef: reference,

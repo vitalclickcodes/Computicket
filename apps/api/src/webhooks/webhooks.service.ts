@@ -150,6 +150,23 @@ export class WebhooksService {
           });
         }
       }
+
+      // Agent commission: if the order came in with an agent code,
+      // credit the agent's wallet for the computed commission.
+      if (full.agentCode && full.agentCommissionKobo > 0) {
+        const agent = await this.prisma.agentProfile.findUnique({
+          where: { agentCode: full.agentCode },
+        });
+        if (agent) {
+          await this.wallet.credit({
+            userId: agent.userId,
+            amountKobo: full.agentCommissionKobo,
+            type: 'ADJUSTMENT',
+            orderId: full.id,
+            note: `Agent commission (${full.agentCode}) on order ${full.id}`,
+          });
+        }
+      }
     }
 
     return { handled: true, issued: result.issued, ticketCount: result.tickets.length };
