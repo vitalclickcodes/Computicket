@@ -15,6 +15,7 @@ interface CreateOrderInput {
   buyerPhone?: string;
   items: Array<{ ticketTypeId: string; quantity: number }>;
   callbackUrl?: string;
+  userId?: string;
 }
 
 const HOLD_MINUTES = 15;
@@ -76,6 +77,7 @@ export class OrdersService {
       return tx.order.create({
         data: {
           eventId: event.id,
+          userId: input.userId,
           buyerEmail: input.buyerEmail,
           buyerName: input.buyerName,
           buyerPhone: input.buyerPhone,

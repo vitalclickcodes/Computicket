@@ -147,7 +147,12 @@ export const api = {
     buyerPhone?: string;
     callbackUrl?: string;
     items: Array<{ ticketTypeId: string; quantity: number }>;
-  }) => request<CreateOrderResponse>('/orders', { method: 'POST', body: JSON.stringify(body) }),
+  }, token?: string) =>
+    request<CreateOrderResponse>('/orders', {
+      method: 'POST',
+      body: JSON.stringify(body),
+      ...(token ? { token } : {}),
+    }),
   getOrderByReference: (reference: string) =>
     request<Order>(`/orders/by-reference/${reference}`),
 
@@ -156,6 +161,19 @@ export const api = {
   signin: (body: { email: string; password: string }) =>
     request<AuthResponse>('/auth/signin', { method: 'POST', body: JSON.stringify(body) }),
   me: (token: string) => request<Me>('/auth/me', { token }),
+
+  myOrders: (token: string) =>
+    request<Array<{
+      id: string;
+      status: 'PENDING' | 'PAID' | 'FAILED' | 'REFUNDED' | 'EXPIRED';
+      totalKobo: number;
+      paystackRef: string;
+      paidAt: string | null;
+      createdAt: string;
+      event: { slug: string; title: string; venue: string; city: string; startsAt: string };
+      ticketCount: number;
+      tickets: Array<{ id: string; code: string; status: 'ISSUED' | 'SCANNED' | 'VOIDED' }>;
+    }>>('/me/orders', { token }),
 
   createOrganizer: (token: string, body: { name: string; slug: string; description?: string }) =>
     request<{ id: string; slug: string; name: string }>('/organizers', {

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, Headers, Param, Post } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
@@ -11,6 +11,7 @@ import {
   Min,
   ValidateNested,
 } from 'class-validator';
+import { AuthService } from '../auth/auth.service';
 import { OrdersService } from './orders.service';
 
 class OrderItemDto {
@@ -31,11 +32,27 @@ class CreateOrderDto {
 @ApiTags('orders')
 @Controller('orders')
 export class OrdersController {
-  constructor(private readonly orders: OrdersService) {}
+  constructor(
+    private readonly orders: OrdersService,
+    private readonly auth: AuthService,
+  ) {}
 
   @Post()
-  create(@Body() dto: CreateOrderDto) {
-    return this.orders.create(dto);
+  async create(@Body() dto: CreateOrderDto, @Headers('authorization') authHeader?: string) {
+    let userId: string | undefined;
+    // Optional auth: if a valid bearer token is present, associate the
+    // order with the user. Invalid tokens are silently ignored — guest
+    // checkout still works.
+    if (authHeader?.startsWith('Bearer ')) {
+      const token = authHeader.slice('Bearer '.length).trim();
+      try {
+        const u = await this.auth.verifyToken(token);
+        userId = u.id;
+      } catch {
+        /* ignore */
+      }
+    }
+    return this.orders.create({ ...dto, userId });
   }
 
   @Get('by-reference/:reference')

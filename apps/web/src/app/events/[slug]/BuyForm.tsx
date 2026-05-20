@@ -1,8 +1,9 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { EventDetail } from '@/lib/api';
 import { api, formatNgn } from '@/lib/api';
+import { getToken } from '@/lib/auth';
 
 interface Props {
   event: EventDetail;
@@ -14,6 +15,19 @@ export function BuyForm({ event }: Props) {
   const [name, setName] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [signedIn, setSignedIn] = useState(false);
+
+  useEffect(() => {
+    const token = getToken();
+    if (!token) return;
+    setSignedIn(true);
+    api.me(token)
+      .then((me) => {
+        setEmail((curr) => curr || me.email);
+        setName((curr) => curr || me.name || '');
+      })
+      .catch(() => undefined);
+  }, []);
 
   const items = event.ticketTypes
     .map((tt) => ({ tt, qty: quantities[tt.id] ?? 0 }))
@@ -36,13 +50,17 @@ export function BuyForm({ event }: Props) {
     setSubmitting(true);
     try {
       const origin = window.location.origin;
-      const res = await api.createOrder({
-        eventSlug: event.slug,
-        buyerEmail: email,
-        buyerName: name || undefined,
-        callbackUrl: `${origin}/checkout/return`,
-        items: items.map((i) => ({ ticketTypeId: i.tt.id, quantity: i.qty })),
-      });
+      const token = getToken() ?? undefined;
+      const res = await api.createOrder(
+        {
+          eventSlug: event.slug,
+          buyerEmail: email,
+          buyerName: name || undefined,
+          callbackUrl: `${origin}/checkout/return`,
+          items: items.map((i) => ({ ticketTypeId: i.tt.id, quantity: i.qty })),
+        },
+        token,
+      );
       window.location.href = res.paystack.authorizationUrl;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong');
@@ -115,6 +133,12 @@ export function BuyForm({ event }: Props) {
           className="border border-gray-300 rounded-md px-3 py-2"
         />
       </div>
+
+      {signedIn && (
+        <p className="mt-3 text-xs text-gray-500">
+          Signed in — your tickets will appear in your <a href="/account" className="text-brand hover:underline">account</a> after payment.
+        </p>
+      )}
 
       {error && <div className="mt-4 text-sm text-red-600">{error}</div>}
 
