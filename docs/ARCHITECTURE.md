@@ -24,7 +24,7 @@ Computicket Nigeria ships several distinct surfaces against one backend:
 
 ### Backend
 
-- **NestJS** (Node.js + TypeScript) — primary API
+- **NestJS** (Node.js + TypeScript) — primary API. Chosen over Laravel for end-to-end type sharing with the Next.js front end, generated OpenAPI clients, and a single language across web + API + edge.
 - REST for public clients, internal RPC where useful
 - BullMQ for background jobs (email, payouts, scan sync, fraud checks)
 
@@ -36,8 +36,8 @@ Computicket Nigeria ships several distinct surfaces against one backend:
 
 ### Infrastructure
 
-- **AWS** (eu-west-1 or af-south-1) or equivalent
-- **Cloudflare** — CDN, WAF, DDoS protection
+- **AWS `eu-central-1`** (Frankfurt) — primary region. Strong Paystack/EU connectivity, full service coverage, GDPR-aligned, acceptable latency to Lagos (~120–150ms) which Cloudflare's African edge offsets for static + cached traffic.
+- **Cloudflare** — CDN, WAF, DDoS protection, edge cache in African PoPs
 - GitHub Actions for CI/CD
 - Sentry for error tracking, PostHog/Plausible for product analytics
 
