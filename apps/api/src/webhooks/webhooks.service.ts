@@ -131,8 +131,42 @@ export class WebhooksService {
         `Computicket: ${full.tickets.length} ticket(s) confirmed for ${full.event.title}. ` +
           `Check your email or computicket.ng/account for QR codes.`,
       ).catch(() => undefined);
+
+      // Referral reward: if this is the buyer's first paid order and a
+      // pending referral row exists, credit the referrer's wallet.
+      if (full.userId) {
+        await this.tryRewardReferral(full.userId, full.id).catch((e) =>
+          this.logger.error(`Referral reward failed: ${(e as Error).message}`),
+        );
+      }
     }
 
     return { handled: true, issued: result.issued, ticketCount: result.tickets.length };
+  }
+
+  private async tryRewardReferral(refereeId: string, orderId: string) {
+    const referral = await this.prisma.referral.findUnique({
+      where: { refereeId },
+      include: { referrer: { select: { id: true, email: true } } },
+    });
+    if (!referral || referral.status === 'REWARDED') return;
+
+    // Conditional update so concurrent webhook deliveries can't double-credit.
+    const claim = await this.prisma.referral.updateMany({
+      where: { id: referral.id, status: 'PENDING' },
+      data: { status: 'REWARDED', rewardedAt: new Date(), orderId },
+    });
+    if (claim.count === 0) return;
+
+    await this.wallet.credit({
+      userId: referral.referrer.id,
+      amountKobo: referral.rewardKobo,
+      type: 'ADJUSTMENT',
+      orderId,
+      note: `Referral reward — referee bought their first ticket`,
+    });
+    this.logger.log(
+      `Rewarded referral ${referral.id}: NGN ${referral.rewardKobo / 100} -> ${referral.referrer.email}`,
+    );
   }
 }

@@ -22,6 +22,9 @@ model User {
   isAdmin           Boolean  @default(false)
   // Cached wallet balance. Source of truth is sum(WalletTransaction.amountKobo).
   walletBalanceKobo Int      @default(0)
+  // Referral program
+  referralCode      String?  @unique
+  referredById      String?
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
@@ -29,6 +32,31 @@ model User {
   orders            Order[]
   walletTransactions WalletTransaction[]
   walletTopUps      WalletTopUp[]
+  referredBy        User?    @relation("UserReferrals", fields: [referredById], references: [id])
+  referred          User[]   @relation("UserReferrals")
+  referralsMade     Referral[] @relation("Referrer")
+  referralReceived  Referral? @relation("Referee")
+}
+
+enum ReferralStatus {
+  PENDING
+  REWARDED
+}
+
+model Referral {
+  id          String         @id @default(cuid())
+  referrerId  String
+  refereeId   String         @unique
+  status      ReferralStatus @default(PENDING)
+  rewardKobo  Int            @default(50000) // NGN 500 default reward
+  rewardedAt  DateTime?
+  orderId     String?
+  createdAt   DateTime       @default(now())
+
+  referrer User @relation("Referrer", fields: [referrerId], references: [id], onDelete: Cascade)
+  referee  User @relation("Referee", fields: [refereeId], references: [id], onDelete: Cascade)
+
+  @@index([referrerId])
 }
 
 enum WalletTxType {
