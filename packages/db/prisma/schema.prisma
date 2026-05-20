@@ -70,6 +70,24 @@ model Organizer {
   apiKeys          ApiKey[]
   webhookEndpoints WebhookEndpoint[]
   promoCodes       PromoCode[]
+  busRoutes        BusRoute[]
+}
+
+model BusRoute {
+  id              String   @id @default(cuid())
+  organizerId     String
+  fromCity        String
+  toCity          String
+  // Typical trip duration in minutes; used for display and rough arrival estimates.
+  durationMinutes Int
+  active          Boolean  @default(true)
+  createdAt       DateTime @default(now())
+
+  organizer Organizer @relation(fields: [organizerId], references: [id], onDelete: Cascade)
+  trips     Event[]
+
+  @@index([fromCity, toCity])
+  @@index([organizerId])
 }
 
 enum PromoCodeType {
@@ -154,6 +172,11 @@ enum EventStatus {
   COMPLETED
 }
 
+enum EventType {
+  EVENT
+  BUS_TRIP
+}
+
 model Event {
   id          String      @id @default(cuid())
   organizerId String
@@ -166,16 +189,23 @@ model Event {
   endsAt      DateTime
   coverUrl    String?
   status      EventStatus @default(DRAFT)
+  type        EventType   @default(EVENT)
+  // For type=BUS_TRIP: optional link to a parent route so buyers can
+  // search by from/to. Trips also use venue=boarding terminal,
+  // city=fromCity for compatibility with the existing event list.
+  busRouteId  String?
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
 
   organizer   Organizer    @relation(fields: [organizerId], references: [id])
+  busRoute    BusRoute?    @relation(fields: [busRouteId], references: [id])
   ticketTypes TicketType[]
   orders      Order[]
   promoCodes  PromoCode[]
 
   @@index([status, startsAt])
   @@index([organizerId])
+  @@index([type, status, startsAt])
 }
 
 model TicketType {

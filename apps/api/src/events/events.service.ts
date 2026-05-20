@@ -1,6 +1,6 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { EventStatus } from '@computicket/db';
+import { EventStatus, EventType } from '@computicket/db';
 
 interface CreateEventInput {
   organizerSlug: string;
@@ -12,6 +12,8 @@ interface CreateEventInput {
   startsAt: string;
   endsAt: string;
   ticketTypes: Array<{ name: string; priceKobo: number; capacity: number }>;
+  type?: EventType;
+  busRouteId?: string;
 }
 
 @Injectable()
@@ -24,6 +26,15 @@ export class EventsService {
     });
     if (!organizer) throw new NotFoundException(`Organizer "${input.organizerSlug}" not found`);
 
+    if (input.busRouteId) {
+      const route = await this.prisma.busRoute.findUnique({
+        where: { id: input.busRouteId },
+      });
+      if (!route || route.organizerId !== organizer.id) {
+        throw new BadRequestException('Bus route not found for this organizer');
+      }
+    }
+
     return this.prisma.event.create({
       data: {
         organizerId: organizer.id,
@@ -35,6 +46,8 @@ export class EventsService {
         startsAt: new Date(input.startsAt),
         endsAt: new Date(input.endsAt),
         status: EventStatus.DRAFT,
+        type: input.type ?? 'EVENT',
+        busRouteId: input.busRouteId,
         ticketTypes: {
           create: input.ticketTypes.map((tt, i) => ({ ...tt, position: i + 1 })),
         },
@@ -47,6 +60,7 @@ export class EventsService {
     return this.prisma.event.findMany({
       where: {
         status: EventStatus.PUBLISHED,
+        type: 'EVENT',
         ...(params.city ? { city: { equals: params.city, mode: 'insensitive' } } : {}),
       },
       orderBy: { startsAt: 'asc' },
@@ -65,6 +79,7 @@ export class EventsService {
       include: {
         organizer: { select: { slug: true, name: true, description: true } },
         ticketTypes: { orderBy: { position: 'asc' } },
+        busRoute: true,
       },
     });
     if (!event) throw new NotFoundException(`Event "${slug}" not found`);

@@ -5,6 +5,7 @@ import {
   ArrayMinSize,
   IsArray,
   IsDateString,
+  IsEnum,
   IsInt,
   IsOptional,
   IsString,
@@ -13,6 +14,7 @@ import {
   MinLength,
   ValidateNested,
 } from 'class-validator';
+import { EventType } from '@computicket/db';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { OrganizerMemberGuard } from '../auth/organizer-member.guard';
 import { EventsService } from './events.service';
@@ -34,6 +36,8 @@ class CreateEventDto {
   @IsDateString() endsAt!: string;
   @IsArray() @ArrayMinSize(1) @ValidateNested({ each: true }) @Type(() => TicketTypeDto)
   ticketTypes!: TicketTypeDto[];
+  @IsOptional() @IsEnum(EventType) type?: EventType;
+  @IsOptional() @IsString() busRouteId?: string;
 }
 
 @ApiTags('events')

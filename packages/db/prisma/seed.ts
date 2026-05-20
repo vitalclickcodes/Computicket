@@ -90,6 +90,90 @@ async function main() {
     },
   });
 
+  // A bus operator with two routes and a handful of trips over the next week.
+  const busOwner = await prisma.user.upsert({
+    where: { email: 'owner@gigm.ng' },
+    update: { passwordHash },
+    create: {
+      email: 'owner@gigm.ng',
+      name: 'GIG Owner',
+      passwordHash,
+    },
+  });
+
+  const busOp = await prisma.organizer.upsert({
+    where: { slug: 'gigm-bus' },
+    update: { status: OrganizerStatus.APPROVED, approvedAt: new Date(), approvedById: admin.id },
+    create: {
+      slug: 'gigm-bus',
+      name: 'GIGM Bus',
+      status: OrganizerStatus.APPROVED,
+      approvedAt: new Date(),
+      approvedById: admin.id,
+      description: 'Inter-city luxury bus services across Nigeria.',
+      members: { create: { userId: busOwner.id, role: 'OWNER' } },
+    },
+  });
+
+  const lagosAbuja = await prisma.busRoute.upsert({
+    where: { id: 'br_lagos_abuja' },
+    update: {},
+    create: {
+      id: 'br_lagos_abuja',
+      organizerId: busOp.id,
+      fromCity: 'Lagos',
+      toCity: 'Abuja',
+      durationMinutes: 9 * 60,
+    },
+  });
+
+  const lagosPh = await prisma.busRoute.upsert({
+    where: { id: 'br_lagos_ph' },
+    update: {},
+    create: {
+      id: 'br_lagos_ph',
+      organizerId: busOp.id,
+      fromCity: 'Lagos',
+      toCity: 'Port Harcourt',
+      durationMinutes: 10 * 60,
+    },
+  });
+
+  const now = new Date();
+  const trips = [
+    { slug: 'gigm-lagos-abuja-morning-day-3', route: lagosAbuja, daysFromNow: 3, hour: 7 },
+    { slug: 'gigm-lagos-abuja-evening-day-3', route: lagosAbuja, daysFromNow: 3, hour: 19 },
+    { slug: 'gigm-lagos-ph-morning-day-5', route: lagosPh, daysFromNow: 5, hour: 7 },
+  ];
+  for (const t of trips) {
+    const departsAt = new Date(now);
+    departsAt.setUTCDate(departsAt.getUTCDate() + t.daysFromNow);
+    departsAt.setUTCHours(t.hour, 0, 0, 0);
+    const arrivesAt = new Date(departsAt.getTime() + t.route.durationMinutes * 60 * 1000);
+    await prisma.event.upsert({
+      where: { slug: t.slug },
+      update: {},
+      create: {
+        slug: t.slug,
+        organizerId: busOp.id,
+        title: `${t.route.fromCity} → ${t.route.toCity}`,
+        venue: `${t.route.fromCity} Terminal`,
+        city: t.route.fromCity,
+        startsAt: departsAt,
+        endsAt: arrivesAt,
+        status: EventStatus.PUBLISHED,
+        type: 'BUS_TRIP',
+        busRouteId: t.route.id,
+        ticketTypes: {
+          create: [
+            { name: 'Standard', priceKobo: 1800000, capacity: 32, position: 1 },
+            { name: 'Executive', priceKobo: 3500000, capacity: 12, position: 2 },
+          ],
+        },
+      },
+    });
+  }
+
   console.log('Seed complete.');
 }
 

@@ -299,6 +299,49 @@ export const api = {
       `/dashboard/organizers/${organizerSlug}/promo-codes/${id}`,
       { method: 'DELETE', token },
     ),
+
+  listBusRoutes: (token: string, organizerSlug: string) =>
+    request<Array<{
+      id: string;
+      fromCity: string;
+      toCity: string;
+      durationMinutes: number;
+      active: boolean;
+      createdAt: string;
+      _count: { trips: number };
+    }>>(`/dashboard/organizers/${organizerSlug}/bus-routes`, { token }),
+  createBusRoute: (
+    token: string,
+    organizerSlug: string,
+    body: { fromCity: string; toCity: string; durationMinutes: number },
+  ) =>
+    request<{ id: string; fromCity: string; toCity: string }>(
+      `/dashboard/organizers/${organizerSlug}/bus-routes`,
+      { method: 'POST', token, body: JSON.stringify(body) },
+    ),
+  deactivateBusRoute: (token: string, organizerSlug: string, id: string) =>
+    request<{ id: string; active: false }>(
+      `/dashboard/organizers/${organizerSlug}/bus-routes/${id}`,
+      { method: 'DELETE', token },
+    ),
+
+  searchBuses: (params: { from?: string; to?: string; date?: string }) => {
+    const qs = new URLSearchParams();
+    if (params.from) qs.set('from', params.from);
+    if (params.to) qs.set('to', params.to);
+    if (params.date) qs.set('date', params.date);
+    return request<Array<{
+      slug: string;
+      title: string;
+      departsAt: string;
+      arrivesAt: string;
+      boardingTerminal: string;
+      organizer: { slug: string; name: string };
+      route: { fromCity: string; toCity: string; durationMinutes: number } | null;
+      ticketTypes: Array<{ id: string; name: string; priceKobo: number; capacity: number; sold: number }>;
+    }>>(`/buses${qs.toString() ? `?${qs}` : ''}`);
+  },
+  busCities: () => request<{ cities: string[] }>('/buses/cities'),
   listEventOrders: (token: string, organizerSlug: string, eventSlug: string) =>
     request<DashboardOrdersResponse>(
       `/dashboard/organizers/${organizerSlug}/events/${eventSlug}/orders`,
