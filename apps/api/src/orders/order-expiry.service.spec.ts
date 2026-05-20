@@ -23,7 +23,7 @@ describe('OrderExpiryService.expire', () => {
 
   it('returns 0 and does nothing when no candidates', async () => {
     const prisma = makePrismaMock([]);
-    const svc = new OrderExpiryService(prisma as never);
+    const svc = new OrderExpiryService(prisma as never, { releaseSeatsForOrder: jest.fn() } as never);
     expect(await svc.expire(new Date())).toBe(0);
     expect(prisma._update).not.toHaveBeenCalled();
   });
@@ -33,7 +33,7 @@ describe('OrderExpiryService.expire', () => {
       { id: 'o1', items: [{ ticketTypeId: 'tt1', quantity: 2 }, { ticketTypeId: 'tt2', quantity: 1 }] },
       { id: 'o2', items: [{ ticketTypeId: 'tt1', quantity: 1 }] },
     ]);
-    const svc = new OrderExpiryService(prisma as never);
+    const svc = new OrderExpiryService(prisma as never, { releaseSeatsForOrder: jest.fn() } as never);
     const expired = await svc.expire(new Date());
     expect(expired).toBe(2);
     expect(prisma._updateMany).toHaveBeenCalledTimes(2);
@@ -49,7 +49,7 @@ describe('OrderExpiryService.expire', () => {
       { id: 'o1', items: [{ ticketTypeId: 'tt1', quantity: 2 }] },
     ]);
     prisma._updateMany.mockResolvedValueOnce({ count: 0 });
-    const svc = new OrderExpiryService(prisma as never);
+    const svc = new OrderExpiryService(prisma as never, { releaseSeatsForOrder: jest.fn() } as never);
     expect(await svc.expire(new Date())).toBe(0);
     expect(prisma._update).not.toHaveBeenCalled();
   });

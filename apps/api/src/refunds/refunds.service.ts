@@ -9,6 +9,7 @@ import { PaystackService } from '../payments/paystack.service';
 import { MailerService } from '../mail/mailer.service';
 import { WebhookDispatcher } from '../developers/webhook-dispatcher.service';
 import { WalletService } from '../wallet/wallet.service';
+import { SeatingService } from '../seating/seating.service';
 
 interface RefundInput {
   orderId: string;
@@ -28,6 +29,7 @@ export class RefundsService {
     private readonly mailer: MailerService,
     private readonly outbound: WebhookDispatcher,
     private readonly wallet: WalletService,
+    private readonly seating: SeatingService,
   ) {}
 
   async refund(input: RefundInput) {
@@ -159,6 +161,7 @@ export class RefundsService {
         where: { orderId: order.id, status: { in: ['ISSUED', 'SCANNED'] } },
         data: { status: 'VOIDED' },
       });
+      await this.seating.voidSeatsForOrder(tx, order.id);
       return { voided: voided.count, becameFinal: true };
     });
 

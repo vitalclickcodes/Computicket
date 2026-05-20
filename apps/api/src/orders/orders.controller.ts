@@ -18,6 +18,7 @@ import { OrdersService } from './orders.service';
 class OrderItemDto {
   @IsString() ticketTypeId!: string;
   @IsInt() @Min(1) quantity!: number;
+  @IsOptional() @IsArray() @IsString({ each: true }) seatIds?: string[];
 }
 
 class CreateOrderDto {

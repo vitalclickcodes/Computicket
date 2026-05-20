@@ -10,13 +10,14 @@ import { PaystackService } from '../payments/paystack.service';
 import { PromoCodesService } from '../promo-codes/promo-codes.service';
 import { WalletService } from '../wallet/wallet.service';
 import { TicketsService } from '../tickets/tickets.service';
+import { SeatingService } from '../seating/seating.service';
 
 interface CreateOrderInput {
   eventSlug: string;
   buyerEmail: string;
   buyerName?: string;
   buyerPhone?: string;
-  items: Array<{ ticketTypeId: string; quantity: number }>;
+  items: Array<{ ticketTypeId: string; quantity: number; seatIds?: string[] }>;
   callbackUrl?: string;
   userId?: string;
   promoCode?: string;
@@ -33,6 +34,7 @@ export class OrdersService {
     private readonly promos: PromoCodesService,
     private readonly wallet: WalletService,
     private readonly tickets: TicketsService,
+    private readonly seating: SeatingService,
   ) {}
 
   async create(input: CreateOrderInput) {
@@ -61,6 +63,16 @@ export class OrdersService {
 
       for (const item of input.items) {
         const tt = ttById.get(item.ticketTypeId)!;
+        const isSeated = tt.seatMap !== null;
+        if (isSeated) {
+          if (!item.seatIds || item.seatIds.length !== item.quantity) {
+            throw new BadRequestException(
+              `Ticket type "${tt.name}" is seated; provide ${item.quantity} seatIds`,
+            );
+          }
+        } else if (item.seatIds && item.seatIds.length > 0) {
+          throw new BadRequestException(`Ticket type "${tt.name}" does not support seat selection`);
+        }
         // Atomic hold: only succeed if (sold + held + quantity) <= capacity.
         const claimed = await tx.$executeRaw(Prisma.sql`
           UPDATE "TicketType"
@@ -95,7 +107,7 @@ export class OrdersService {
       const fee = Math.round(subtotalAfterDiscount * 0.015);
       const total = subtotalAfterDiscount + fee;
 
-      return tx.order.create({
+      const created = await tx.order.create({
         data: {
           eventId: event.id,
           userId: input.userId,
@@ -114,6 +126,19 @@ export class OrdersService {
         },
         include: { items: true },
       });
+
+      // Claim seats for any seated items. Failure aborts the whole txn,
+      // which also rolls back the held counter increments above.
+      for (const item of input.items) {
+        if (!item.seatIds || item.seatIds.length === 0) continue;
+        const tt = ttById.get(item.ticketTypeId)!;
+        const heldIds = await this.seating.holdSeats(tx, tt.id, item.seatIds, created.id);
+        if (!heldIds) {
+          throw new BadRequestException(`One or more selected seats are no longer available`);
+        }
+      }
+
+      return created;
     });
 
     // Wallet-paid path: debit the user's wallet and finalise the order

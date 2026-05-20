@@ -7,6 +7,7 @@ import {
 import { randomBytes } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { TicketStatus } from '@computicket/db';
+import { SeatingService } from '../seating/seating.service';
 
 const SCAN_ROLES = new Set(['OWNER', 'MANAGER', 'SCANNER']);
 
@@ -17,7 +18,10 @@ function generateTicketCode(): string {
 
 @Injectable()
 export class TicketsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly seating: SeatingService,
+  ) {}
 
   /**
    * Issue tickets for an order that has already been marked PAID (wallet
@@ -35,6 +39,7 @@ export class TicketsService {
         return { issued: false, tickets: order.tickets.map((t) => ({ id: t.id, code: t.code })) };
       }
       const created: { id: string; code: string }[] = [];
+      const byType: Array<{ ticketTypeId: string; ticketIds: string[] }> = [];
       for (const item of order.items) {
         await tx.ticketType.update({
           where: { id: item.ticketTypeId },
@@ -43,6 +48,7 @@ export class TicketsService {
             held: { decrement: item.quantity },
           },
         });
+        const ids: string[] = [];
         for (let i = 0; i < item.quantity; i++) {
           const ticket = await tx.ticket.create({
             data: {
@@ -52,8 +58,11 @@ export class TicketsService {
             },
           });
           created.push({ id: ticket.id, code: ticket.code });
+          ids.push(ticket.id);
         }
+        byType.push({ ticketTypeId: item.ticketTypeId, ticketIds: ids });
       }
+      await this.seating.sellHeldSeats(tx, order.id, byType);
       return { issued: true, tickets: created };
     });
   }
@@ -95,6 +104,7 @@ export class TicketsService {
       }
 
       const created: { id: string; code: string }[] = [];
+      const byType: Array<{ ticketTypeId: string; ticketIds: string[] }> = [];
       for (const item of order.items) {
         // Convert the hold into a sale: held -= qty, sold += qty.
         await tx.ticketType.update({
@@ -104,6 +114,7 @@ export class TicketsService {
             held: { decrement: item.quantity },
           },
         });
+        const ids: string[] = [];
         for (let i = 0; i < item.quantity; i++) {
           const ticket = await tx.ticket.create({
             data: {
@@ -113,8 +124,11 @@ export class TicketsService {
             },
           });
           created.push({ id: ticket.id, code: ticket.code });
+          ids.push(ticket.id);
         }
+        byType.push({ ticketTypeId: item.ticketTypeId, ticketIds: ids });
       }
+      await this.seating.sellHeldSeats(tx, order.id, byType);
       return { issued: true, tickets: created };
     });
   }

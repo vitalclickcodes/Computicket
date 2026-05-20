@@ -495,6 +495,21 @@ export const api = {
       { method: 'POST', token },
     ),
 
+  setSeatMap: (
+    token: string,
+    organizerSlug: string,
+    ticketTypeId: string,
+    rows: Array<{ row: string; seats: string[] }>,
+  ) =>
+    request<{ totalSeats: number }>(
+      `/dashboard/organizers/${organizerSlug}/ticket-types/${ticketTypeId}/seat-map`,
+      { method: 'POST', token, body: JSON.stringify({ rows }) },
+    ),
+  listSeats: (ticketTypeId: string) =>
+    request<Array<{ id: string; row: string; label: string; status: 'AVAILABLE' | 'HELD' | 'SOLD' }>>(
+      `/ticket-types/${ticketTypeId}/seats`,
+    ),
+
   adminStats: (token: string) => request<AdminStats>('/admin/stats', { token }),
   adminListOrganizers: (token: string) =>
     request<AdminOrganizer[]>('/admin/organizers', { token }),

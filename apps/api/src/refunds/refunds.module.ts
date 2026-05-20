@@ -2,11 +2,12 @@ import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
 import { DevelopersModule } from '../developers/developers.module';
 import { WalletModule } from '../wallet/wallet.module';
+import { SeatingModule } from '../seating/seating.module';
 import { RefundsController } from './refunds.controller';
 import { RefundsService } from './refunds.service';
 
 @Module({
-  imports: [AuthModule, DevelopersModule, WalletModule],
+  imports: [AuthModule, DevelopersModule, WalletModule, SeatingModule],
   controllers: [RefundsController],
   providers: [RefundsService],
   exports: [RefundsService],

@@ -1,12 +1,16 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '../prisma/prisma.service';
+import { SeatingService } from '../seating/seating.service';
 
 @Injectable()
 export class OrderExpiryService {
   private readonly logger = new Logger(OrderExpiryService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly seating: SeatingService,
+  ) {}
 
   @Cron(CronExpression.EVERY_MINUTE)
   async runScheduled() {
@@ -40,6 +44,7 @@ export class OrderExpiryService {
             data: { held: { decrement: item.quantity } },
           });
         }
+        await this.seating.releaseSeatsForOrder(tx, order.id);
         expiredCount += 1;
       });
     }

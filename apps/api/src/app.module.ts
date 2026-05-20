@@ -21,6 +21,7 @@ import { TeamModule } from './team/team.module';
 import { PromoCodesModule } from './promo-codes/promo-codes.module';
 import { BusesModule } from './buses/buses.module';
 import { WalletModule } from './wallet/wallet.module';
+import { SeatingModule } from './seating/seating.module';
 
 @Module({
   imports: [
@@ -46,6 +47,7 @@ import { WalletModule } from './wallet/wallet.module';
     PromoCodesModule,
     BusesModule,
     WalletModule,
+    SeatingModule,
   ],
 })
 export class AppModule {}

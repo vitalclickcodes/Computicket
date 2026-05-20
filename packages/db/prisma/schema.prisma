@@ -298,12 +298,44 @@ model TicketType {
   sold        Int      @default(0)
   held        Int      @default(0)
   position    Int      @default(0)
+  // Reserved seating: when populated, this tier is seated. Layout is
+  // an array of rows: { row: "A", seats: ["1","2","3",...] }. Capacity
+  // must equal sum of seats across rows.
+  seatMap     Json?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   event       Event        @relation(fields: [eventId], references: [id], onDelete: Cascade)
   orderItems  OrderItem[]
   tickets     Ticket[]
+  seats       Seat[]
+}
+
+enum SeatStatus {
+  AVAILABLE
+  HELD
+  SOLD
+}
+
+model Seat {
+  id           String     @id @default(cuid())
+  ticketTypeId String
+  // Row + label together are the human seat name (e.g. "A12").
+  row          String
+  label        String
+  status       SeatStatus @default(AVAILABLE)
+  // Once SOLD, this links to the ticket that owns this seat.
+  ticketId     String?    @unique
+  // While HELD, links to the order holding it (released on expiry/refund).
+  heldByOrderId String?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  ticketType TicketType @relation(fields: [ticketTypeId], references: [id], onDelete: Cascade)
+  ticket     Ticket?    @relation("TicketSeat", fields: [ticketId], references: [id])
+
+  @@unique([ticketTypeId, row, label])
+  @@index([ticketTypeId, status])
 }
 
 // ---------- Orders & Tickets ----------
@@ -398,6 +430,7 @@ model Ticket {
 
   order      Order      @relation(fields: [orderId], references: [id], onDelete: Cascade)
   ticketType TicketType @relation(fields: [ticketTypeId], references: [id])
+  seat       Seat?      @relation("TicketSeat")
 
   @@index([status])
 }
