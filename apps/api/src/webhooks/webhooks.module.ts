@@ -3,11 +3,12 @@ import { TicketsModule } from '../tickets/tickets.module';
 import { DevelopersModule } from '../developers/developers.module';
 import { RefundsModule } from '../refunds/refunds.module';
 import { WalletModule } from '../wallet/wallet.module';
+import { LoyaltyModule } from '../loyalty/loyalty.module';
 import { WebhooksController } from './webhooks.controller';
 import { WebhooksService } from './webhooks.service';
 
 @Module({
-  imports: [TicketsModule, DevelopersModule, RefundsModule, WalletModule],
+  imports: [TicketsModule, DevelopersModule, RefundsModule, WalletModule, LoyaltyModule],
   controllers: [WebhooksController],
   providers: [WebhooksService],
 })

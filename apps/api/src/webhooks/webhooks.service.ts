@@ -7,6 +7,7 @@ import { SmsService } from '../mail/sms.service';
 import { WebhookDispatcher } from '../developers/webhook-dispatcher.service';
 import { RefundsService } from '../refunds/refunds.service';
 import { WalletService } from '../wallet/wallet.service';
+import { LoyaltyService } from '../loyalty/loyalty.service';
 
 interface PaystackChargeSuccess {
   event: 'charge.success';
@@ -29,6 +30,7 @@ export class WebhooksService {
     private readonly refunds: RefundsService,
     private readonly wallet: WalletService,
     private readonly sms: SmsService,
+    private readonly loyalty: LoyaltyService,
   ) {}
 
   verifyPaystackSignature(rawBody: Buffer, signature: string | undefined): boolean {
@@ -138,6 +140,15 @@ export class WebhooksService {
         await this.tryRewardReferral(full.userId, full.id).catch((e) =>
           this.logger.error(`Referral reward failed: ${(e as Error).message}`),
         );
+
+        // Loyalty: credit points for the spend.
+        const earned = this.loyalty.pointsForSpend(full.totalKobo);
+        if (earned > 0) {
+          await this.prisma.$transaction(async (tx) => {
+            await this.loyalty.credit(tx, full.userId!, earned, 'EARN', `Order ${full.id}`, full.id);
+            await tx.order.update({ where: { id: full.id }, data: { loyaltyPointsEarned: earned } });
+          });
+        }
       }
     }
 

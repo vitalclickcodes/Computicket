@@ -12,6 +12,7 @@ import { WalletService } from '../wallet/wallet.service';
 import { TicketsService } from '../tickets/tickets.service';
 import { SeatingService } from '../seating/seating.service';
 import { AffiliateService } from '../marketing/affiliate.service';
+import { LoyaltyService } from '../loyalty/loyalty.service';
 
 interface CreateOrderInput {
   eventSlug: string;
@@ -25,6 +26,7 @@ interface CreateOrderInput {
   promoCode?: string;
   payFromWallet?: boolean;
   affiliateCode?: string;
+  redeemLoyaltyPoints?: number;
 }
 
 const HOLD_MINUTES = 15;
@@ -39,6 +41,7 @@ export class OrdersService {
     private readonly tickets: TicketsService,
     private readonly seating: SeatingService,
     private readonly affiliate: AffiliateService,
+    private readonly loyalty: LoyaltyService,
   ) {}
 
   async create(input: CreateOrderInput) {
@@ -135,7 +138,23 @@ export class OrdersService {
         if (link) affiliateCodeStored = link.code;
       }
 
-      const subtotalAfterDiscount = subtotal - discount;
+      // Loyalty points redemption — must be authed and have sufficient balance.
+      let loyaltyPointsRedeemed = 0;
+      let loyaltyDiscount = 0;
+      if (input.redeemLoyaltyPoints && input.redeemLoyaltyPoints > 0) {
+        if (!input.userId) {
+          throw new BadRequestException('Loyalty redemption requires sign-in');
+        }
+        const debit = await this.loyalty.debit(
+          tx, input.userId, input.redeemLoyaltyPoints,
+          'Redeemed at checkout',
+        );
+        if (!debit.ok) throw new BadRequestException('Insufficient loyalty points');
+        loyaltyPointsRedeemed = input.redeemLoyaltyPoints;
+        loyaltyDiscount = Math.min(this.loyalty.koboForPoints(input.redeemLoyaltyPoints), subtotal - discount);
+      }
+
+      const subtotalAfterDiscount = Math.max(0, subtotal - discount - loyaltyDiscount);
       const fee = Math.round(subtotalAfterDiscount * 0.015);
       const total = subtotalAfterDiscount + fee;
 
@@ -153,6 +172,7 @@ export class OrdersService {
           totalKobo: total,
           paidFromWallet: input.payFromWallet ?? false,
           affiliateCode: affiliateCodeStored,
+          loyaltyPointsRedeemed,
           expiresAt: new Date(Date.now() + HOLD_MINUTES * 60_000),
           paystackRef: reference,
           items: { create: items },

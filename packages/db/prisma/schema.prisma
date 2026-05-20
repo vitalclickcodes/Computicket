@@ -28,6 +28,7 @@ model User {
   isAdmin           Boolean  @default(false)
   // Cached wallet balance. Source of truth is sum(WalletTransaction.amountKobo).
   walletBalanceKobo Int          @default(0)
+  loyaltyPoints     Int          @default(0)
   // Wallet KYC tier (NONE = NGN 50K top-up cap, BASIC = 500K, VERIFIED = unlimited)
   kycTier           WalletKycTier @default(NONE)
   kycSubmittedAt    DateTime?
@@ -46,6 +47,7 @@ model User {
   orders            Order[]
   walletTransactions WalletTransaction[]
   walletTopUps      WalletTopUp[]
+  loyaltyTransactions LoyaltyTransaction[]
   referredBy        User?    @relation("UserReferrals", fields: [referredById], references: [id])
   referred          User[]   @relation("UserReferrals")
   referralsMade     Referral[] @relation("Referrer")
@@ -94,6 +96,29 @@ model WalletTransaction {
   refundId           String?
   note               String?
   createdAt          DateTime     @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}
+
+enum LoyaltyTxType {
+  EARN
+  REDEEM
+  ADJUSTMENT
+  EXPIRE
+}
+
+model LoyaltyTransaction {
+  id               String        @id @default(cuid())
+  userId           String
+  // Signed: positive for EARN/ADJUSTMENT(+), negative for REDEEM/EXPIRE
+  points           Int
+  type             LoyaltyTxType
+  balanceAfter     Int
+  orderId          String?
+  note             String?
+  createdAt        DateTime      @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -506,6 +531,8 @@ model Order {
   refundedKobo    Int         @default(0)
   paidFromWallet  Boolean     @default(false)
   affiliateCode   String?
+  loyaltyPointsRedeemed Int   @default(0)
+  loyaltyPointsEarned   Int   @default(0)
   paystackRef     String?     @unique
   paidAt          DateTime?
   expiresAt       DateTime
