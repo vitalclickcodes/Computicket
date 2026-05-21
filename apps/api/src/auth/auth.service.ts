@@ -47,7 +47,10 @@ export type SigninResult = SigninSuccess | Signin2FAChallenge;
 export interface AuthedUser {
   id: string;
   email: string;
+  sessionId: string;
 }
+
+const SESSION_TTL_DAYS = 7;
 
 @Injectable()
 export class AuthService {
@@ -56,7 +59,7 @@ export class AuthService {
     private readonly jwt: JwtService,
   ) {}
 
-  async signup(input: SignupInput) {
+  async signup(input: SignupInput, meta?: { ip?: string; userAgent?: string }) {
     const existing = await this.prisma.user.findUnique({ where: { email: input.email } });
     if (existing?.passwordHash) {
       throw new ConflictException('Email already registered');
@@ -107,7 +110,7 @@ export class AuthService {
       });
     }
 
-    return this.issueToken(user);
+    return this.issueToken(user, meta);
   }
 
   private async generateUniqueReferralCode(): Promise<string> {
@@ -120,7 +123,10 @@ export class AuthService {
     return generateReferralCode() + Date.now().toString(36).slice(-2).toUpperCase();
   }
 
-  async signin(input: SigninInput): Promise<SigninResult> {
+  async signin(
+    input: SigninInput,
+    meta?: { ip?: string; userAgent?: string },
+  ): Promise<SigninResult> {
     const user = await this.prisma.user.findUnique({ where: { email: input.email } });
     if (!user?.passwordHash) throw new UnauthorizedException('Invalid email or password');
     if (user.deletedAt) throw new UnauthorizedException('Account closed');
@@ -163,14 +169,18 @@ export class AuthService {
       const ok2 = await this.totpVerifier(user.id, input.totpCode);
       if (!ok2) throw new UnauthorizedException('Invalid 2FA code');
     }
-    return this.issueToken(user);
+    return this.issueToken(user, meta);
   }
 
   /**
    * Second step of 2FA signin. Validates the challenge token from step 1
    * and the freshly-typed TOTP code, then issues a real session.
    */
-  async signin2FA(challengeToken: string, totpCode: string): Promise<SigninSuccess> {
+  async signin2FA(
+    challengeToken: string,
+    totpCode: string,
+    meta?: { ip?: string; userAgent?: string },
+  ): Promise<SigninSuccess> {
     let payload: { sub: string; purpose: string };
     try {
       payload = await this.jwt.verifyAsync(challengeToken);
@@ -184,7 +194,7 @@ export class AuthService {
     if (!user || user.deletedAt) throw new UnauthorizedException('Account closed');
     const ok = await this.totpVerifier(user.id, totpCode);
     if (!ok) throw new UnauthorizedException('Invalid 2FA code');
-    return this.issueToken(user);
+    return this.issueToken(user, meta);
   }
 
   /**
@@ -222,16 +232,87 @@ export class AuthService {
     };
   }
 
-  async verifyToken(token: string): Promise<AuthedUser> {
+  async verifyToken(
+    token: string,
+    meta?: { ip?: string; userAgent?: string },
+  ): Promise<AuthedUser> {
+    let payload: { sub: string; email: string; jti?: string };
     try {
-      const payload = await this.jwt.verifyAsync<{ sub: string; email: string }>(token);
-      return { id: payload.sub, email: payload.email };
+      payload = await this.jwt.verifyAsync(token);
     } catch {
       throw new UnauthorizedException('Invalid or expired token');
     }
+    if (!payload.jti) {
+      // Legacy token issued before sessions existed. Refuse — forces a
+      // fresh sign-in, which is the conservative move on the upgrade.
+      throw new UnauthorizedException('Token missing session id; please sign in again');
+    }
+    const session = await this.prisma.session.findUnique({ where: { jti: payload.jti } });
+    if (!session) throw new UnauthorizedException('Session not found');
+    if (session.revokedAt) throw new UnauthorizedException('Session revoked');
+    if (session.expiresAt.getTime() < Date.now()) {
+      throw new UnauthorizedException('Session expired');
+    }
+    // Hot-path optimisation: only write lastUsedAt if the stored value
+    // is more than 60s stale, so a burst of authed requests doesn't
+    // hammer the row.
+    if (Date.now() - session.lastUsedAt.getTime() > 60_000) {
+      await this.prisma.session.update({
+        where: { id: session.id },
+        data: { lastUsedAt: new Date(), ...(meta?.ip ? { ipAddress: meta.ip } : {}) },
+      });
+    }
+    return { id: payload.sub, email: payload.email, sessionId: session.id };
   }
 
-  private async issueToken(user: { id: string; email: string; name: string | null }) {
+  /**
+   * Revoke a single session. Used by the /me/sessions endpoint and
+   * indirectly by password change / 2FA-disable flows.
+   */
+  async revokeSession(userId: string, sessionId: string) {
+    const updated = await this.prisma.session.updateMany({
+      where: { id: sessionId, userId, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+    return { revoked: updated.count > 0 };
+  }
+
+  /**
+   * Revoke every session for a user except optionally the current one.
+   * Called from "log out everywhere" and from sensitive account events.
+   */
+  async revokeAllSessions(userId: string, exceptSessionId?: string) {
+    const updated = await this.prisma.session.updateMany({
+      where: {
+        userId,
+        revokedAt: null,
+        ...(exceptSessionId ? { id: { not: exceptSessionId } } : {}),
+      },
+      data: { revokedAt: new Date() },
+    });
+    return { revokedCount: updated.count };
+  }
+
+  async listSessions(userId: string, currentSessionId: string) {
+    const rows = await this.prisma.session.findMany({
+      where: { userId, revokedAt: null, expiresAt: { gt: new Date() } },
+      orderBy: { lastUsedAt: 'desc' },
+      select: {
+        id: true,
+        ipAddress: true,
+        userAgent: true,
+        createdAt: true,
+        lastUsedAt: true,
+        expiresAt: true,
+      },
+    });
+    return rows.map((r) => ({ ...r, current: r.id === currentSessionId }));
+  }
+
+  private async issueToken(
+    user: { id: string; email: string; name: string | null },
+    meta?: { ip?: string; userAgent?: string },
+  ) {
     // Clear lockout state on any successful issuance — covers both
     // password signin and the 2FA challenge completion path.
     await this.prisma.user.updateMany({
@@ -241,7 +322,21 @@ export class AuthService {
       },
       data: { failedSigninCount: 0, lockedUntil: null },
     });
-    const token = await this.jwt.signAsync({ sub: user.id, email: user.email });
+    const jti = randomBytes(18).toString('base64url');
+    const expiresAt = new Date(Date.now() + SESSION_TTL_DAYS * 24 * 60 * 60 * 1000);
+    await this.prisma.session.create({
+      data: {
+        userId: user.id,
+        jti,
+        ipAddress: meta?.ip,
+        userAgent: meta?.userAgent?.slice(0, 256),
+        expiresAt,
+      },
+    });
+    const token = await this.jwt.signAsync(
+      { sub: user.id, email: user.email, jti },
+      { expiresIn: `${SESSION_TTL_DAYS}d` },
+    );
     return {
       token,
       user: { id: user.id, email: user.email, name: user.name },

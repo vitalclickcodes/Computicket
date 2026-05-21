@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Ip, Param, Post, Req, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { IsEmail, IsOptional, IsString, MinLength } from 'class-validator';
 import { Throttle } from '@nestjs/throttler';
@@ -32,20 +32,23 @@ export class AuthController {
 
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @Post('signup')
-  signup(@Body() dto: SignupDto) {
-    return this.auth.signup(dto);
+  signup(@Body() dto: SignupDto, @Req() req: Request, @Ip() ip: string) {
+    return this.auth.signup(dto, { ip, userAgent: req.get('user-agent') ?? undefined });
   }
 
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @Post('signin')
-  signin(@Body() dto: SigninDto) {
-    return this.auth.signin(dto);
+  signin(@Body() dto: SigninDto, @Req() req: Request, @Ip() ip: string) {
+    return this.auth.signin(dto, { ip, userAgent: req.get('user-agent') ?? undefined });
   }
 
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @Post('signin/2fa')
-  signin2FA(@Body() dto: Signin2FADto) {
-    return this.auth.signin2FA(dto.challengeToken, dto.totpCode);
+  signin2FA(@Body() dto: Signin2FADto, @Req() req: Request, @Ip() ip: string) {
+    return this.auth.signin2FA(dto.challengeToken, dto.totpCode, {
+      ip,
+      userAgent: req.get('user-agent') ?? undefined,
+    });
   }
 
   @ApiBearerAuth()

@@ -24,7 +24,10 @@ export class JwtAuthGuard implements CanActivate {
       throw new UnauthorizedException('Missing bearer token');
     }
     const token = header.slice('Bearer '.length).trim();
-    req.user = await this.auth.verifyToken(token);
+    req.user = await this.auth.verifyToken(token, {
+      ip: req.ip,
+      userAgent: req.get('user-agent') ?? undefined,
+    });
     return true;
   }
 }

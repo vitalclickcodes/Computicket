@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { AuthController } from './auth.controller';
+import { SessionsController } from './sessions.controller';
 import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { OrganizerMemberGuard } from './organizer-member.guard';
@@ -15,7 +16,7 @@ import { AdminGuard } from './admin.guard';
       }),
     }),
   ],
-  controllers: [AuthController],
+  controllers: [AuthController, SessionsController],
   providers: [AuthService, JwtAuthGuard, OrganizerMemberGuard, AdminGuard],
   exports: [AuthService, JwtAuthGuard, OrganizerMemberGuard, AdminGuard, JwtModule],
 })

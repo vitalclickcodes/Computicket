@@ -17,6 +17,15 @@ interface TotpSetup {
   otpauthUri: string;
 }
 
+interface SessionRow {
+  id: string;
+  ipAddress: string | null;
+  userAgent: string | null;
+  createdAt: string;
+  lastUsedAt: string;
+  current: boolean;
+}
+
 export default function SecurityPage() {
   const router = useRouter();
   const [token, setTokenState] = useState<string | null>(null);
@@ -27,6 +36,7 @@ export default function SecurityPage() {
   const [code, setCode] = useState('');
   const [disablePw, setDisablePw] = useState('');
   const [deletePw, setDeletePw] = useState('');
+  const [sessions, setSessions] = useState<SessionRow[]>([]);
 
   useEffect(() => {
     const t = getToken();
@@ -39,11 +49,41 @@ export default function SecurityPage() {
   }, [router]);
 
   async function refresh(t: string) {
-    const res = await fetch(`${API_URL}/me/security`, {
-      headers: { authorization: `Bearer ${t}` },
-      cache: 'no-store',
+    const [secRes, sessRes] = await Promise.all([
+      fetch(`${API_URL}/me/security`, {
+        headers: { authorization: `Bearer ${t}` },
+        cache: 'no-store',
+      }),
+      fetch(`${API_URL}/me/sessions`, {
+        headers: { authorization: `Bearer ${t}` },
+        cache: 'no-store',
+      }),
+    ]);
+    if (secRes.ok) setStatus((await secRes.json()) as SecurityStatus);
+    if (sessRes.ok) setSessions((await sessRes.json()) as SessionRow[]);
+  }
+
+  async function revokeSession(id: string) {
+    if (!token) return;
+    await fetch(`${API_URL}/me/sessions/${id}`, {
+      method: 'DELETE',
+      headers: { authorization: `Bearer ${token}` },
     });
-    if (res.ok) setStatus((await res.json()) as SecurityStatus);
+    setInfo('Session revoked.');
+    await refresh(token);
+  }
+
+  async function revokeOthers() {
+    if (!token) return;
+    const res = await fetch(`${API_URL}/me/sessions`, {
+      method: 'DELETE',
+      headers: { authorization: `Bearer ${token}` },
+    });
+    if (res.ok) {
+      const body = (await res.json()) as { revokedCount: number };
+      setInfo(`Signed out of ${body.revokedCount} other session${body.revokedCount === 1 ? '' : 's'}.`);
+      await refresh(token);
+    }
   }
 
   async function call<T>(path: string, init?: RequestInit): Promise<T> {
@@ -186,6 +226,47 @@ export default function SecurityPage() {
               Set up 2FA
             </button>
           </>
+        )}
+      </section>
+
+      <section className="rounded-xl border border-gray-200 bg-white p-5">
+        <h2 className="font-semibold">Active sessions</h2>
+        <p className="text-sm text-gray-600 mt-1">
+          Devices currently signed into your account. Revoke any session to
+          immediately invalidate its token.
+        </p>
+        <ul className="mt-3 divide-y divide-gray-100 text-sm">
+          {sessions.map((s) => (
+            <li key={s.id} className="py-2 flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <div className="truncate">
+                  {s.userAgent ?? <span className="text-gray-400">Unknown device</span>}
+                  {s.current && (
+                    <span className="ml-2 text-xs font-medium text-emerald-700">this device</span>
+                  )}
+                </div>
+                <div className="text-xs text-gray-500">
+                  IP {s.ipAddress ?? 'unknown'} · last seen {new Date(s.lastUsedAt).toLocaleString('en-NG')}
+                </div>
+              </div>
+              {!s.current && (
+                <button
+                  onClick={() => void revokeSession(s.id)}
+                  className="rounded-md bg-gray-100 border border-gray-300 px-3 py-1.5 text-xs"
+                >
+                  Revoke
+                </button>
+              )}
+            </li>
+          ))}
+        </ul>
+        {sessions.length > 1 && (
+          <button
+            onClick={revokeOthers}
+            className="mt-3 rounded-md bg-red-600 text-white px-4 py-2 text-sm"
+          >
+            Sign out of all other sessions
+          </button>
         )}
       </section>
 

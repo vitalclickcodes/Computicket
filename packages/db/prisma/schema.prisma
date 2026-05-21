@@ -37,6 +37,7 @@ model User {
   // credential-stuffing across many IPs against one account.
   failedSigninCount Int      @default(0)
   lockedUntil       DateTime?
+  sessions          Session[]
   isAdmin           Boolean  @default(false)
   // Cached wallet balance. Source of truth is sum(WalletTransaction.amountKobo).
   walletBalanceKobo Int          @default(0)
@@ -894,4 +895,24 @@ model AuditLog {
   @@index([createdAt])
   @@index([actorUserId])
   @@index([action])
+}
+
+model Session {
+  id          String   @id @default(cuid())
+  userId      String
+  // JWT identifier embedded in the access token. Looking up by jti on
+  // every authed request lets us revoke individual sessions without
+  // waiting for the JWT to expire.
+  jti         String   @unique
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime @default(now())
+  lastUsedAt  DateTime @default(now())
+  expiresAt   DateTime
+  revokedAt   DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, revokedAt])
+  @@index([expiresAt])
 }
