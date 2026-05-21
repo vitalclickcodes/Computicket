@@ -158,7 +158,7 @@ export function HeroCinematic() {
             style={{
               fontSize: 18,
               color: 'var(--ink-2)',
-              maxWidth: 620,
+              maxWidth: 880,
               lineHeight: 1.55,
               textWrap: 'pretty',
             }}
