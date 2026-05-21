@@ -1,0 +1,32 @@
+name: Mobile CI
+
+on:
+  push:
+    branches: [main, "claude/**"]
+    paths:
+      - apps/mobile/**
+      - .github/workflows/mobile.yml
+  pull_request:
+    paths:
+      - apps/mobile/**
+      - .github/workflows/mobile.yml
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: "3.27.x"
+      # Regenerate the platform shells we deliberately don't track.
+      # `create .` is idempotent and writes ios/, android/, web/ alongside
+      # the existing lib/ + pubspec.yaml without touching our source files.
+      - run: flutter create --no-overwrite --org ng.computicket --project-name computicket_mobile .
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test
