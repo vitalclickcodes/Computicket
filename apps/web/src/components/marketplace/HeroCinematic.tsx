@@ -146,7 +146,7 @@ export function HeroCinematic() {
           </div>
         </div>
 
-        <div style={{ maxWidth: 880 }}>
+        <div style={{ maxWidth: 1100 }}>
           <h1 className="h-1" style={{ margin: '0 0 18px' }}>
             <span className="text-gradient">Everywhere you&apos;d rather be —</span>
             <br />
