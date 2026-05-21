@@ -1,10 +1,11 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  // Standalone output bundles only the runtime files (no node_modules at
-  // /, no monorepo siblings) into .next/standalone — the Docker image
-  // can then ship a minimal final stage. See docs/DEPLOY.md.
-  output: 'standalone',
+  // `output: 'standalone'` shrinks the Docker image but disables some
+  // Vercel-specific optimisations (ISR cache, edge functions). Opt in
+  // via BUILD_TARGET=standalone for the Docker pipeline; leave it off
+  // by default so Vercel builds get the native path.
+  ...(process.env.BUILD_TARGET === 'standalone' ? { output: 'standalone' } : {}),
 };
 
 export default nextConfig;
