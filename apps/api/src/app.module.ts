@@ -35,6 +35,7 @@ import { WhitelabelModule } from './whitelabel/whitelabel.module';
 import { PricingModule } from './pricing/pricing.module';
 import { StreamingModule } from './streaming/streaming.module';
 import { SupportModule } from './support/support.module';
+import { NftModule } from './nft/nft.module';
 
 @Module({
   imports: [
@@ -74,6 +75,7 @@ import { SupportModule } from './support/support.module';
     PricingModule,
     StreamingModule,
     SupportModule,
+    NftModule,
   ],
 })
 export class AppModule {}

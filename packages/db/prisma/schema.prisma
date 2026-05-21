@@ -805,6 +805,14 @@ model Ticket {
   scannedBy    String?
   // Current owner — initialized to Order.userId on issuance, updated by resale.
   ownerUserId  String?
+  // NFT-as-ticket: deterministic per-ticket id used in the ERC-721 token URI.
+  // Lazy-assigned on first metadata or claim request so unminted tickets
+  // don't carry chain-format state for free.
+  nftTokenId        BigInt?  @unique
+  // EVM wallet address (0x…40 hex) the buyer attached when claiming the
+  // collectible. Lower-cased, validated server-side. Resale clears it.
+  nftClaimedWallet  String?
+  nftClaimedAt      DateTime?
   createdAt    DateTime     @default(now())
 
   order      Order      @relation(fields: [orderId], references: [id], onDelete: Cascade)
