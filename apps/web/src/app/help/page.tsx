@@ -90,6 +90,7 @@ export default function HelpPage() {
           <Icon name="search" size={18} />
           <input
             type="search"
+            aria-label="Search help centre articles"
             placeholder="Search the help centre — e.g. refund, QR, transfer"
             className="input"
             style={{ border: 0, background: 'transparent', padding: '14px 0', fontSize: 17 }}

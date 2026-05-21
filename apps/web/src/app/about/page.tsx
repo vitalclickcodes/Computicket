@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { Icon } from '@/components/Icon';
-import { ContentSection, PillarGrid } from '@/components/marketplace/ContentPage';
+import { PillarGrid } from '@/components/marketplace/ContentPage';
 import { CategoryHero } from '@/components/marketplace/CategoryHero';
 import { SectionHead } from '@/components/marketplace/SectionHead';
 
@@ -179,10 +179,6 @@ export default function AboutPage() {
           ))}
         </div>
       </section>
-
-      <ContentSection title="">
-        <></>
-      </ContentSection>
 
       <section className="wrap" style={{ paddingBottom: 96 }}>
         <div

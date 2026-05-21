@@ -80,6 +80,7 @@ export default function EventsPage() {
           >
             <Icon name="search" size={20} />
             <input
+              type="search"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search events, venues, cities…"
@@ -98,7 +99,7 @@ export default function EventsPage() {
               <span className="ai-dot" />
               <span>Compass interpreting</span>
             </span>
-            <button type="button" className="icon-btn">
+            <button type="button" className="icon-btn" aria-label="Voice search">
               <Icon name="mic" size={16} />
             </button>
             <button type="button" className="btn btn-accent">
@@ -325,10 +326,10 @@ export default function EventsPage() {
               <button type="button" className="chip">
                 Best match <Icon name="chevronDown" size={11} />
               </button>
-              <button type="button" className="icon-btn">
+              <button type="button" className="icon-btn" aria-label="Grid view">
                 <Icon name="grid" size={15} />
               </button>
-              <button type="button" className="icon-btn">
+              <button type="button" className="icon-btn" aria-label="Map view">
                 <Icon name="map" size={15} />
               </button>
             </div>

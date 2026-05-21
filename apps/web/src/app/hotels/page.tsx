@@ -109,6 +109,7 @@ export default function HotelsPage() {
                   ) : null}
                   <span
                     className="icon-btn"
+                    aria-hidden="true"
                     style={{
                       position: 'absolute',
                       top: 12,

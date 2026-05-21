@@ -44,7 +44,12 @@ export function ForYouRail() {
               <div className="text-xs muted mt-1">{p.sub}</div>
               <div className="between mt-4">
                 <span className="text-sm fw-500">{p.price}</span>
-                <button type="button" className="icon-btn" style={{ width: 32, height: 32 }}>
+                <button
+                  type="button"
+                  className="icon-btn"
+                  style={{ width: 32, height: 32 }}
+                  aria-label={`Open ${p.title}`}
+                >
                   <Icon name="arrow" size={14} />
                 </button>
               </div>

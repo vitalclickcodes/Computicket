@@ -87,8 +87,26 @@
 
   --ink:            oklch(0.18 0.04 285);
   --ink-2:          oklch(0.32 0.04 285);
-  --ink-3:          oklch(0.50 0.03 285);
-  --ink-4:          oklch(0.65 0.025 285);
+  /* ink-3 and ink-4 lowered from 0.50 / 0.65 so muted body text reaches
+     WCAG AA 4.5:1 on white surfaces. Keeps the muted/muted-2 hierarchy
+     intact (ink-4 is still lighter than ink-3) without failing a11y. */
+  --ink-3:          oklch(0.40 0.035 285);
+  --ink-4:          oklch(0.48 0.03 285);
+  /* Darken --danger from 0.65 → 0.50 in light mode so red text (used
+     for upward-trend deltas, "X left" badges, etc.) reaches AA on
+     white card backgrounds. Used as a badge background with white
+     text it's still high contrast. */
+  --danger:         oklch(0.50 0.22 25);
+
+  /* Darken --accent in light mode from the dark-mode-tuned bright
+     Naija green to a contract-safe dark variant (~ #006a40, the
+     same hue as the Tailwind brand-dark token). All the inline
+     uses (icon backgrounds, accent text, dot-live, eyebrows) inherit
+     this automatically. Buttons get white ink to keep contrast on
+     the darker background — see `.btn-accent` override below. */
+  --accent:         oklch(0.42 0.17 152);
+  --accent-soft:    oklch(0.42 0.17 152 / 0.14);
+  --accent-glow:    oklch(0.42 0.17 152 / 0.35);
 
   --nebula-1: radial-gradient(60% 80% at 20% 10%, oklch(0.88 0.10 152 / 0.55), transparent 60%),
               radial-gradient(50% 70% at 85% 30%, oklch(0.88 0.08 180 / 0.45), transparent 65%),
@@ -166,6 +184,7 @@ img, svg { display: block; max-width: 100%; }
 .btn-primary { background: var(--ink); color: var(--bg-void); }
 .btn-primary:hover { box-shadow: 0 10px 30px -10px var(--ink); }
 .btn-accent { background: var(--accent); color: oklch(0.15 0.04 152); font-weight: 600; }
+[data-theme="light"] .btn-accent { color: oklch(0.99 0 0); }
 .btn-accent:hover { box-shadow: 0 0 40px -5px var(--accent-glow); }
 .btn-ghost { background: transparent; color: var(--ink); border-color: var(--line); }
 .btn-ghost:hover { background: var(--surface); }
@@ -413,7 +432,19 @@ img, svg { display: block; max-width: 100%; }
 .search-value.placeholder { color: var(--ink-4); font-weight: 400; }
 
 /* ---------- Accent ---------- */
-.accent-text { color: var(--accent); }
+/* In light mode the bright Naija green falls to ~2.7:1 on white, which
+   fails WCAG AA. Default `.accent-text` to a darker variant and only
+   restore the brighter colour in explicit dark mode (where the dark
+   void background gives it plenty of contrast). */
+.accent-text { color: oklch(0.42 0.17 152); }
+.chip-accent { color: oklch(0.42 0.17 152); }
+[data-theme="dark"] .accent-text { color: var(--accent); }
+[data-theme="dark"] .chip-accent { color: var(--accent); }
+
+/* When .accent-text is itself a link, colour alone shouldn't carry
+   the affordance (axe-core `link-in-text-block`). Underline it. */
+a.accent-text { text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px; }
+a.accent-text:hover { text-decoration-thickness: 2px; }
 .text-gradient {
   background: linear-gradient(120deg, var(--ink) 0%, var(--ink) 35%, oklch(0.80 0.18 152) 65%, oklch(0.78 0.14 180) 100%);
   -webkit-background-clip: text;

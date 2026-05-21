@@ -231,6 +231,7 @@ export default function SupportPage() {
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={onKeyDown}
                 placeholder="Ask about your orders, refunds, QR codes, transfers…"
+                aria-label="Message Compass support"
                 rows={2}
                 disabled={!token || sending}
                 style={{
