@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Post, Req, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { ArrayMinSize, IsArray, IsOptional, IsString, MinLength } from 'class-validator';
 import type { Request } from 'express';
@@ -18,6 +18,14 @@ class TokenRequestDto {
   @IsString() client_id!: string;
   @IsString() client_secret!: string;
   @IsOptional() @IsString() scope?: string;
+  @IsOptional() @IsString() code?: string;
+  @IsOptional() @IsString() redirect_uri?: string;
+}
+
+class GrantDto {
+  @IsString() client_id!: string;
+  @IsString() redirect_uri!: string;
+  @IsString() scope!: string;
 }
 
 @ApiTags('oauth-clients')
@@ -43,21 +51,72 @@ export class OAuthClientsController {
   }
 }
 
-@ApiTags('oauth-token')
+@ApiTags('oauth')
 @Controller('oauth')
 export class OAuthTokenController {
   constructor(private readonly oauth: OAuthService) {}
 
+  /**
+   * Step 1 of the authorization_code flow. The client redirects the
+   * user to this endpoint; the front-end consent page calls it to
+   * surface the client/scope info before asking the user to approve.
+   */
+  @Get('authorize')
+  describe(
+    @Query('client_id') clientId: string,
+    @Query('redirect_uri') redirectUri: string,
+    @Query('scope') scope: string,
+  ) {
+    if (!clientId || !redirectUri || !scope) {
+      throw new BadRequestException('client_id, redirect_uri, scope are required');
+    }
+    return this.oauth.describeAuthorizationRequest({
+      clientId,
+      redirectUri,
+      scopes: scope.split(/\s+/).filter(Boolean),
+    });
+  }
+
+  /**
+   * Step 2: the user approves. Authenticated via JWT (existing buyer or
+   * organizer login). Returns the code; the consent page redirects the
+   * browser to redirect_uri with ?code=... appended.
+   */
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @Post('authorize/grant')
+  grant(@Body() dto: GrantDto, @Req() req: Request) {
+    return this.oauth.issueAuthorizationCode({
+      clientId: dto.client_id,
+      userId: req.user!.id,
+      redirectUri: dto.redirect_uri,
+      scopes: dto.scope.split(/\s+/).filter(Boolean),
+    });
+  }
+
   @Post('token')
   token(@Body() dto: TokenRequestDto) {
-    if (dto.grant_type !== 'client_credentials') {
-      throw new Error('Only grant_type=client_credentials is supported');
+    if (dto.grant_type === 'client_credentials') {
+      return this.oauth.issueToken({
+        clientId: dto.client_id,
+        clientSecret: dto.client_secret,
+        scope: dto.scope,
+      });
     }
-    return this.oauth.issueToken({
-      clientId: dto.client_id,
-      clientSecret: dto.client_secret,
-      scope: dto.scope,
-    });
+    if (dto.grant_type === 'authorization_code') {
+      if (!dto.code || !dto.redirect_uri) {
+        throw new BadRequestException('code and redirect_uri are required for authorization_code');
+      }
+      return this.oauth.exchangeCode({
+        clientId: dto.client_id,
+        clientSecret: dto.client_secret,
+        code: dto.code,
+        redirectUri: dto.redirect_uri,
+      });
+    }
+    throw new BadRequestException(
+      "Unsupported grant_type; expected 'client_credentials' or 'authorization_code'",
+    );
   }
 }
 

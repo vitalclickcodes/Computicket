@@ -261,14 +261,33 @@ model OAuthClient {
 
   organizer    Organizer       @relation(fields: [organizerId], references: [id], onDelete: Cascade)
   accessTokens OAuthAccessToken[]
+  authorizationCodes OAuthAuthorizationCode[]
 
   @@index([clientId])
   @@index([organizerId])
 }
 
+model OAuthAuthorizationCode {
+  id          String   @id @default(cuid())
+  clientId    String
+  userId      String
+  // sha256(code); plaintext is returned to the client on /authorize/grant
+  codeHash    String   @unique
+  scopes      String
+  redirectUri String
+  used        Boolean  @default(false)
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+
+  client OAuthClient @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([clientId, expiresAt])
+}
+
 model OAuthAccessToken {
   id        String   @id @default(cuid())
   clientId  String
+  userId    String?
   // sha256(token); the plaintext is returned only at issuance
   tokenHash String   @unique
   scopes    String

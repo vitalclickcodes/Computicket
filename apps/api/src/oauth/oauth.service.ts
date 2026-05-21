@@ -10,7 +10,9 @@ import { PrismaService } from '../prisma/prisma.service';
 const CLIENT_ID_PREFIX = 'cli_';
 const SECRET_PREFIX = 'cs_';
 const TOKEN_PREFIX = 'oat_';
+const CODE_PREFIX = 'oac_';
 const TOKEN_TTL_SECONDS = 3600;
+const CODE_TTL_SECONDS = 600; // 10 minutes
 
 function sha256(s: string): string {
   return createHash('sha256').update(s).digest('hex');
@@ -73,6 +75,120 @@ export class OAuthService {
   }
 
   /**
+   * Look up a client for the public consent screen. Validates redirectUri
+   * against the client's registered list. Throws if anything is off.
+   */
+  async describeAuthorizationRequest(input: {
+    clientId: string;
+    redirectUri: string;
+    scopes: string[];
+  }) {
+    const client = await this.prisma.oAuthClient.findUnique({
+      where: { clientId: input.clientId },
+    });
+    if (!client || !client.active) throw new UnauthorizedException('Invalid client');
+    if (!client.redirectUris.includes(input.redirectUri)) {
+      throw new BadRequestException('redirect_uri is not registered for this client');
+    }
+    const allowed = client.scopes.split(/\s+/).filter(Boolean);
+    for (const s of input.scopes) {
+      if (!allowed.includes(s)) {
+        throw new BadRequestException(`Scope '${s}' not granted to this client`);
+      }
+    }
+    return {
+      client: { id: client.id, clientId: client.clientId, name: client.name },
+      redirectUri: input.redirectUri,
+      scopes: input.scopes,
+    };
+  }
+
+  /**
+   * User-authed grant. Issues a single-use code redeemable at /token.
+   */
+  async issueAuthorizationCode(input: {
+    clientId: string;
+    userId: string;
+    redirectUri: string;
+    scopes: string[];
+  }) {
+    const desc = await this.describeAuthorizationRequest({
+      clientId: input.clientId,
+      redirectUri: input.redirectUri,
+      scopes: input.scopes,
+    });
+    const code = `${CODE_PREFIX}${randomBytes(20).toString('base64url')}`;
+    await this.prisma.oAuthAuthorizationCode.create({
+      data: {
+        clientId: desc.client.id,
+        userId: input.userId,
+        codeHash: sha256(code),
+        scopes: input.scopes.join(' '),
+        redirectUri: input.redirectUri,
+        expiresAt: new Date(Date.now() + CODE_TTL_SECONDS * 1000),
+      },
+    });
+    return { code };
+  }
+
+  /**
+   * Exchange an authorization code for an access token. Single-use; the
+   * redirect_uri must match the one bound at authorize time.
+   */
+  async exchangeCode(input: {
+    clientId: string;
+    clientSecret: string;
+    code: string;
+    redirectUri: string;
+  }) {
+    const client = await this.prisma.oAuthClient.findUnique({
+      where: { clientId: input.clientId },
+    });
+    if (!client || !client.active) throw new UnauthorizedException('Invalid client');
+    if (!safeEqual(sha256(input.clientSecret), client.clientSecretHash)) {
+      throw new UnauthorizedException('Invalid client');
+    }
+    const record = await this.prisma.oAuthAuthorizationCode.findUnique({
+      where: { codeHash: sha256(input.code) },
+    });
+    if (!record || record.clientId !== client.id) {
+      throw new UnauthorizedException('Invalid authorization code');
+    }
+    if (record.used) throw new UnauthorizedException('Authorization code already used');
+    if (record.expiresAt.getTime() < Date.now()) {
+      throw new UnauthorizedException('Authorization code expired');
+    }
+    if (record.redirectUri !== input.redirectUri) {
+      throw new BadRequestException('redirect_uri mismatch');
+    }
+    // Burn the code: conditional update so concurrent exchange attempts
+    // can't both succeed.
+    const burn = await this.prisma.oAuthAuthorizationCode.updateMany({
+      where: { id: record.id, used: false },
+      data: { used: true },
+    });
+    if (burn.count === 0) throw new UnauthorizedException('Authorization code already used');
+
+    const scopes = record.scopes.split(/\s+/).filter(Boolean);
+    const tokenPlain = `${TOKEN_PREFIX}${randomBytes(28).toString('base64url')}`;
+    await this.prisma.oAuthAccessToken.create({
+      data: {
+        clientId: client.id,
+        userId: record.userId,
+        tokenHash: sha256(tokenPlain),
+        scopes: scopes.join(' '),
+        expiresAt: new Date(Date.now() + TOKEN_TTL_SECONDS * 1000),
+      },
+    });
+    return {
+      access_token: tokenPlain,
+      token_type: 'Bearer',
+      expires_in: TOKEN_TTL_SECONDS,
+      scope: scopes.join(' '),
+    };
+  }
+
+  /**
    * OAuth 2.0 client_credentials grant.
    */
   async issueToken(input: { clientId: string; clientSecret: string; scope?: string }) {
@@ -127,6 +243,7 @@ export class OAuthService {
       client: { id: t.client.id, name: t.client.name, clientId: t.client.clientId },
       organizer: t.client.organizer,
       scopes: t.scopes.split(/\s+/).filter(Boolean),
+      userId: t.userId ?? null,
     };
   }
 }
