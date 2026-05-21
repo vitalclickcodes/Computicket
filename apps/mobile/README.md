@@ -45,29 +45,26 @@ bucket, the iOS asset catalogue, and the web `favicon.png`. Re-run it
 whenever `assets/icon.png` changes. The CI workflow at
 `.github/workflows/mobile.yml` does both steps automatically.
 
-### Camera permission (Scanner)
+### Platform manifests we track by hand
 
-`mobile_scanner` needs an explicit camera permission declaration. Once
-`flutter create .` has scaffolded the platform shells, add:
+Two files inside the otherwise-ignored platform shells are checked
+in because they carry runtime permissions we don't want re-deriving
+each time someone runs `flutter create .`:
 
-**`ios/Runner/Info.plist`** — under the top-level `<dict>`:
+| File | What it carries |
+|---|---|
+| `ios/Runner/Info.plist` | `NSCameraUsageDescription` (scanner camera prompt) plus the standard Flutter bundle keys |
+| `android/app/src/main/AndroidManifest.xml` | `CAMERA` + `INTERNET` permissions, optional camera hardware features, and the `<queries>` clause `url_launcher` needs on Android 11+ to open the Paystack hosted checkout in an external browser |
 
-```xml
-<key>NSCameraUsageDescription</key>
-<string>Used to scan ticket QR codes at the gate.</string>
-```
+`flutter create --no-overwrite` leaves both files alone since they
+already exist. If you ever need to reset them to the upstream Flutter
+template, delete them and re-run `flutter create .` — but you'll
+have to re-add the permission strings before scanning works again.
 
-**`android/app/src/main/AndroidManifest.xml`** — at the top of the
-`<manifest>` element:
-
-```xml
-<uses-permission android:name="android.permission.CAMERA" />
-```
-
-The scanner screen handles "permission denied" gracefully — it'll
-surface the OS-level prompt the first time, and the API itself enforces
-the OrganizerMember role on `/v1/tickets/scan` so even an unauthorised
-scan attempt fails cleanly with a 403.
+The scanner screen surfaces the OS-level camera prompt the first
+time, and the API enforces the `OrganizerMember(SCANNER+)` role on
+`/v1/tickets/scan` so an unauthorised scan attempt still fails
+cleanly with a 403.
 
 ## Pointing at the API
 
