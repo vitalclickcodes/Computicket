@@ -639,6 +639,22 @@ model TicketType {
   orderItems  OrderItem[]
   tickets     Ticket[]
   seats       Seat[]
+  pricingRules PricingRule[]
+}
+
+model PricingRule {
+  id                    String   @id @default(cuid())
+  ticketTypeId          String
+  // Trigger threshold: rule fires once sold/capacity >= this percent (0–100)
+  soldPercentThreshold  Int
+  // Signed basis-point adjustment vs. base price. +1000 = +10%, -500 = -5%.
+  priceAdjustmentBps    Int
+  active                Boolean  @default(true)
+  createdAt             DateTime @default(now())
+
+  ticketType TicketType @relation(fields: [ticketTypeId], references: [id], onDelete: Cascade)
+
+  @@index([ticketTypeId, soldPercentThreshold])
 }
 
 enum SeatStatus {

@@ -15,6 +15,7 @@ import { AffiliateService } from '../marketing/affiliate.service';
 import { LoyaltyService } from '../loyalty/loyalty.service';
 import { AgentsService } from '../agents/agents.service';
 import { CorporateService } from '../corporate/corporate.service';
+import { PricingService } from '../pricing/pricing.service';
 
 interface CreateOrderInput {
   eventSlug: string;
@@ -48,6 +49,7 @@ export class OrdersService {
     private readonly loyalty: LoyaltyService,
     private readonly agents: AgentsService,
     private readonly corporate: CorporateService,
+    private readonly pricing: PricingService,
   ) {}
 
   async create(input: CreateOrderInput) {
@@ -59,6 +61,18 @@ export class OrdersService {
         organizer: { select: { paystackSubaccountCode: true } },
       },
     });
+    // Snapshot pricing rules for all ticket types up-front; we re-read
+    // sold/held inside the transaction to capture the current utilisation
+    // at the moment of pricing.
+    const allRules = event
+      ? await this.pricing.rulesForTicketTypes(event.ticketTypes.map((t) => t.id))
+      : [];
+    const rulesByTt = new Map<string, typeof allRules>();
+    for (const r of allRules) {
+      const arr = rulesByTt.get(r.ticketTypeId) ?? [];
+      arr.push(r);
+      rulesByTt.set(r.ticketTypeId, arr);
+    }
     if (!event) throw new NotFoundException(`Event "${input.eventSlug}" not found`);
     if (event.status !== 'PUBLISHED') throw new BadRequestException('Event is not on sale');
 
@@ -97,11 +111,18 @@ export class OrdersService {
         if (claimed === 0) {
           throw new BadRequestException(`Ticket type "${tt.name}" sold out`);
         }
-        subtotal += tt.priceKobo * item.quantity;
+        // Re-read current sold/held to compute dynamic price against
+        // post-claim utilisation.
+        const fresh = await tx.ticketType.findUniqueOrThrow({
+          where: { id: tt.id },
+          select: { priceKobo: true, capacity: true, sold: true, held: true },
+        });
+        const unitPriceKobo = this.pricing.computePriceKobo(fresh, rulesByTt.get(tt.id) ?? []);
+        subtotal += unitPriceKobo * item.quantity;
         items.push({
           ticketTypeId: tt.id,
           quantity: item.quantity,
-          unitPriceKobo: tt.priceKobo,
+          unitPriceKobo,
         });
       }
 
