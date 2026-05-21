@@ -42,7 +42,10 @@ export class AuthController {
     return this.auth.signin(dto, { ip, userAgent: req.get('user-agent') ?? undefined });
   }
 
-  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  // 3/min is tight because a 6-digit TOTP only has 1M combinations and
+  // the challenge window is 5 minutes — a looser cap would meaningfully
+  // help a brute-forcer within that window.
+  @Throttle({ default: { limit: 3, ttl: 60_000 } })
   @Post('signin/2fa')
   signin2FA(@Body() dto: Signin2FADto, @Req() req: Request, @Ip() ip: string) {
     return this.auth.signin2FA(dto.challengeToken, dto.totpCode, {

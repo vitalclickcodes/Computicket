@@ -9,6 +9,7 @@ import {
   IsInt,
   IsOptional,
   IsString,
+  IsUrl,
   Min,
   ValidateNested,
 } from 'class-validator';
@@ -31,7 +32,12 @@ class CreateOrderDto {
   @IsEmail() buyerEmail!: string;
   @IsOptional() @IsString() buyerName?: string;
   @IsOptional() @IsString() buyerPhone?: string;
-  @IsOptional() @IsString() callbackUrl?: string;
+  // Must be a full HTTP(S) URL. Paystack redirects the buyer's browser
+  // here after payment, so an unvalidated value is an open-redirect
+  // surface (the buyer could be sent to a phishing page that looks
+  // like our success view).
+  @IsOptional() @IsUrl({ require_protocol: true, protocols: ['http', 'https'] })
+  callbackUrl?: string;
   @IsOptional() @IsString() promoCode?: string;
   @IsOptional() @IsBoolean() payFromWallet?: boolean;
   @IsOptional() @IsString() affiliateCode?: string;

@@ -136,6 +136,36 @@ describe('Auth & security (e2e)', () => {
         .send({ email: 'nobody@nowhere.test' })
         .expect(201);
     });
+
+    it('confirming a password reset revokes all existing sessions', async () => {
+      const server = ctx.app.getHttpServer();
+      // Sign up → captures session 1
+      const { body: signup } = await request(server).post('/v1/auth/signup')
+        .send({ email: 'pwr@test.ng', password: 'OldPassword1!' }).expect(201);
+      const oldToken = signup.token;
+      // Sanity: token works
+      await request(server).get('/v1/me/sessions')
+        .set('authorization', `Bearer ${oldToken}`).expect(200);
+
+      // Generate and burn a reset token directly so we don't need to
+      // scrape the dev-mail log.
+      const plain = 'reset-revoke-' + Date.now();
+      const { createHash } = await import('crypto');
+      const user = await ctx.prisma.user.findUniqueOrThrow({ where: { email: 'pwr@test.ng' } });
+      await ctx.prisma.passwordResetToken.create({
+        data: {
+          userId: user.id,
+          tokenHash: createHash('sha256').update(plain).digest('hex'),
+          expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+        },
+      });
+      await request(server).post('/v1/auth/password-reset/confirm')
+        .send({ token: plain, newPassword: 'BrandNewPassword456!' }).expect(201);
+
+      // Old session is now revoked.
+      await request(server).get('/v1/me/sessions')
+        .set('authorization', `Bearer ${oldToken}`).expect(401);
+    });
   });
 
   describe('2FA TOTP', () => {

@@ -138,6 +138,9 @@ export class PrivacyService {
       this.prisma.passwordResetToken.deleteMany({ where: { userId: user.id } }),
       this.prisma.oAuthAccessToken.deleteMany({ where: { userId: user.id } }),
       this.prisma.oAuthAuthorizationCode.deleteMany({ where: { userId: user.id } }),
+      // Sessions carry IP + user-agent (PII); hard-delete rather than
+      // just revoke so the right-to-erasure is total.
+      this.prisma.session.deleteMany({ where: { userId: user.id } }),
     ]);
     await this.audit.record({
       actorUserId: user.id,

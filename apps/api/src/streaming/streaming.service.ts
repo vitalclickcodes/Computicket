@@ -66,7 +66,9 @@ export class StreamingService {
     const exp = Math.floor(Date.now() / 1000) + PLAYBACK_TTL_SECONDS;
     const secret = process.env.STREAMING_SECRET ?? process.env.JWT_SECRET ?? 'dev_unsafe';
     const payload = `${ticket.id}.${exp}`;
-    const sig = createHmac('sha256', secret).update(payload).digest('hex').slice(0, 32);
+    // Full 32-byte HMAC-SHA256 hex (64 chars). The previous .slice(0, 32)
+    // truncated to 16 bytes — cuts brute-force margin from 2^128 to 2^64.
+    const sig = createHmac('sha256', secret).update(payload).digest('hex');
     const playbackToken = `${payload}.${sig}`;
 
     return {

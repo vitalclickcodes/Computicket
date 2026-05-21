@@ -192,6 +192,9 @@ export class SecurityService implements OnModuleInit {
       where: { userId: row.userId, usedAt: null },
       data: { usedAt: new Date() },
     });
+    // Revoke every active session — a password reset is the strongest
+    // signal that the previous credentials are no longer trusted.
+    await this.auth.revokeAllSessions(row.userId);
     await this.audit.record({
       actorUserId: user.id,
       actorEmail: user.email,
