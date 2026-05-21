@@ -20,6 +20,9 @@ ARG NEXT_PUBLIC_API_URL=https://api.computicket.ng/v1
 ARG NEXT_PUBLIC_SITE_URL=https://computicket.ng
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
 ENV NEXT_PUBLIC_SITE_URL=${NEXT_PUBLIC_SITE_URL}
+# Toggle the standalone runtime tree for the Docker image. Vercel
+# builds skip this and use the native path; see next.config.mjs.
+ENV BUILD_TARGET=standalone
 RUN cd /repo && pnpm --filter @computicket/web run build
 
 # ---- Stage 3: runtime ----
