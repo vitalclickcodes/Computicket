@@ -26,7 +26,23 @@ interface SignupInput {
 interface SigninInput {
   email: string;
   password: string;
+  totpCode?: string;
 }
+
+export interface SigninSuccess {
+  token: string;
+  user: { id: string; email: string; name: string | null };
+}
+
+export interface Signin2FAChallenge {
+  requires2FA: true;
+  // Short-lived ticket that the client returns alongside the TOTP code.
+  // Lets us bind the second step to the first without storing pending
+  // sessions, and rules out reuse without a fresh password check.
+  challengeToken: string;
+}
+
+export type SigninResult = SigninSuccess | Signin2FAChallenge;
 
 export interface AuthedUser {
   id: string;
@@ -104,12 +120,60 @@ export class AuthService {
     return generateReferralCode() + Date.now().toString(36).slice(-2).toUpperCase();
   }
 
-  async signin(input: SigninInput) {
+  async signin(input: SigninInput): Promise<SigninResult> {
     const user = await this.prisma.user.findUnique({ where: { email: input.email } });
     if (!user?.passwordHash) throw new UnauthorizedException('Invalid email or password');
+    if (user.deletedAt) throw new UnauthorizedException('Account closed');
     const ok = await bcrypt.compare(input.password, user.passwordHash);
     if (!ok) throw new UnauthorizedException('Invalid email or password');
+
+    if (user.totpEnabledAt) {
+      // Without a code, hand back a short-lived challenge token. The
+      // client re-posts {challengeToken, totpCode}; we verify both and
+      // then issue the real session.
+      if (!input.totpCode) {
+        const challengeToken = await this.jwt.signAsync(
+          { sub: user.id, purpose: '2fa-challenge' },
+          { expiresIn: '5m' },
+        );
+        return { requires2FA: true, challengeToken };
+      }
+      const ok2 = await this.totpVerifier(user.id, input.totpCode);
+      if (!ok2) throw new UnauthorizedException('Invalid 2FA code');
+    }
     return this.issueToken(user);
+  }
+
+  /**
+   * Second step of 2FA signin. Validates the challenge token from step 1
+   * and the freshly-typed TOTP code, then issues a real session.
+   */
+  async signin2FA(challengeToken: string, totpCode: string): Promise<SigninSuccess> {
+    let payload: { sub: string; purpose: string };
+    try {
+      payload = await this.jwt.verifyAsync(challengeToken);
+    } catch {
+      throw new UnauthorizedException('Invalid or expired 2FA challenge');
+    }
+    if (payload.purpose !== '2fa-challenge') {
+      throw new UnauthorizedException('Invalid 2FA challenge');
+    }
+    const user = await this.prisma.user.findUnique({ where: { id: payload.sub } });
+    if (!user || user.deletedAt) throw new UnauthorizedException('Account closed');
+    const ok = await this.totpVerifier(user.id, totpCode);
+    if (!ok) throw new UnauthorizedException('Invalid 2FA code');
+    return this.issueToken(user);
+  }
+
+  /**
+   * Injected at app bootstrap by SecurityModule to break the circular
+   * dependency (AuthModule -> SecurityModule -> AuthModule). Defaults to
+   * a reject-all stub so misconfiguration fails closed.
+   */
+  private totpVerifier: (userId: string, code: string) => Promise<boolean> = async () => false;
+
+  setTotpVerifier(fn: (userId: string, code: string) => Promise<boolean>) {
+    this.totpVerifier = fn;
   }
 
   async me(userId: string) {

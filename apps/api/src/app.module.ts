@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { PrismaModule } from './prisma/prisma.module';
 import { PaymentsModule } from './payments/payments.module';
 import { MailModule } from './mail/mail.module';
@@ -36,11 +38,16 @@ import { PricingModule } from './pricing/pricing.module';
 import { StreamingModule } from './streaming/streaming.module';
 import { SupportModule } from './support/support.module';
 import { NftModule } from './nft/nft.module';
+import { AuditModule } from './audit/audit.module';
+import { SecurityModule } from './security/security.module';
+import { PrivacyModule } from './privacy/privacy.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     ScheduleModule.forRoot(),
+    // Loose default — strict ceilings are applied per-route with @Throttle.
+    ThrottlerModule.forRoot([{ ttl: 60_000, limit: 120 }]),
     PrismaModule,
     PaymentsModule,
     MailModule,
@@ -76,6 +83,12 @@ import { NftModule } from './nft/nft.module';
     StreamingModule,
     SupportModule,
     NftModule,
+    AuditModule,
+    SecurityModule,
+    PrivacyModule,
+  ],
+  providers: [
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
   ],
 })
 export class AppModule {}

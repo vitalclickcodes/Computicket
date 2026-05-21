@@ -78,6 +78,65 @@ export class MailerService {
     this.logger.log(`Sent confirmation to ${input.to} for ${input.tickets.length} tickets`);
   }
 
+  async sendEmailVerification(input: { to: string; name?: string | null; link: string }): Promise<void> {
+    const subject = 'Verify your Computicket email';
+    const greeting = input.name ? `Hi ${escapeHtml(input.name)},` : 'Hi there,';
+    const html = `<!doctype html><html><body style="font-family:ui-sans-serif,system-ui,Arial;background:#f9fafb;padding:24px">
+<div style="max-width:520px;margin:0 auto;background:#fff;border-radius:8px;padding:32px">
+<div style="font-weight:700;color:#008751">Computicket Nigeria</div>
+<h1 style="font-size:22px;margin:16px 0">Verify your email</h1>
+<p>${greeting}</p>
+<p>Tap the button below to confirm this email address. The link expires in 24 hours.</p>
+<p style="margin:24px 0"><a href="${escapeHtml(input.link)}" style="background:#008751;color:#fff;text-decoration:none;padding:10px 18px;border-radius:6px;font-weight:600">Verify email</a></p>
+<p style="color:#6b7280;font-size:12px">Didn't sign up? You can ignore this email.</p>
+</div></body></html>`;
+    const text = `${greeting}\n\nConfirm your email: ${input.link}\n\nLink expires in 24 hours. If you didn't sign up, ignore this email.`;
+    await this.deliver(input.to, subject, html, text);
+  }
+
+  async sendPasswordReset(input: { to: string; name?: string | null; link: string }): Promise<void> {
+    const subject = 'Reset your Computicket password';
+    const greeting = input.name ? `Hi ${escapeHtml(input.name)},` : 'Hi there,';
+    const html = `<!doctype html><html><body style="font-family:ui-sans-serif,system-ui,Arial;background:#f9fafb;padding:24px">
+<div style="max-width:520px;margin:0 auto;background:#fff;border-radius:8px;padding:32px">
+<div style="font-weight:700;color:#008751">Computicket Nigeria</div>
+<h1 style="font-size:22px;margin:16px 0">Reset your password</h1>
+<p>${greeting}</p>
+<p>We received a request to reset your password. Tap below — the link is single-use and expires in 1 hour.</p>
+<p style="margin:24px 0"><a href="${escapeHtml(input.link)}" style="background:#008751;color:#fff;text-decoration:none;padding:10px 18px;border-radius:6px;font-weight:600">Reset password</a></p>
+<p style="color:#6b7280;font-size:12px">Didn't ask for this? You can ignore this email and your password stays the same.</p>
+</div></body></html>`;
+    const text = `${greeting}\n\nReset your password: ${input.link}\n\nLink is single-use and expires in 1 hour. If you didn't ask for this, ignore this email.`;
+    await this.deliver(input.to, subject, html, text);
+  }
+
+  private async deliver(to: string, subject: string, html: string, text: string): Promise<void> {
+    if (!this.postmarkToken) {
+      this.logger.log(`[dev mail] to=${to} subject="${subject}"`);
+      this.logger.log(`[dev mail] body: ${text}`);
+      return;
+    }
+    const res = await fetch(POSTMARK_URL, {
+      method: 'POST',
+      headers: {
+        accept: 'application/json',
+        'content-type': 'application/json',
+        'x-postmark-server-token': this.postmarkToken,
+      },
+      body: JSON.stringify({
+        From: this.fromAddress,
+        To: to,
+        Subject: subject,
+        HtmlBody: html,
+        TextBody: text,
+        MessageStream: 'outbound',
+      }),
+    });
+    if (!res.ok) {
+      this.logger.error(`Postmark deliver failed (${res.status}): ${await res.text()}`);
+    }
+  }
+
   async sendBroadcast(input: BroadcastInput): Promise<void> {
     const html = `<!doctype html><html><body style="font-family:ui-sans-serif,system-ui,Arial;background:#f9fafb;padding:24px">
 <div style="max-width:560px;margin:0 auto;background:#fff;border-radius:8px;padding:32px">

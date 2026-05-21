@@ -25,6 +25,14 @@ model User {
   phone             String?  @unique
   name              String?
   passwordHash      String?
+  emailVerifiedAt   DateTime?
+  // TOTP secret, AES-256-GCM-encrypted at rest with the app key. Null
+  // until the user enables 2FA.
+  totpSecretEnc     String?
+  totpEnabledAt     DateTime?
+  // Set when the user requested NDPR account deletion; PII is scrubbed
+  // but the row stays to anchor order history for accounting.
+  deletedAt         DateTime?
   isAdmin           Boolean  @default(false)
   // Cached wallet balance. Source of truth is sum(WalletTransaction.amountKobo).
   walletBalanceKobo Int          @default(0)
@@ -844,4 +852,42 @@ model TicketListing {
 
   @@index([status, createdAt])
   @@index([ticketId])
+}
+
+model EmailVerificationToken {
+  id        String   @id @default(cuid())
+  userId    String
+  tokenHash String   @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  userId    String
+  tokenHash String   @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model AuditLog {
+  id           String   @id @default(cuid())
+  actorUserId  String?
+  actorEmail   String?
+  action       String
+  targetType   String?
+  targetId     String?
+  metadata     Json?
+  ip           String?
+  createdAt    DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([actorUserId])
+  @@index([action])
 }

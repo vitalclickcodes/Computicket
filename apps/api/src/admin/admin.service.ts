@@ -1,9 +1,13 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { AuditService } from '../audit/audit.service';
 
 @Injectable()
 export class AdminService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly audit: AuditService,
+  ) {}
 
   async listOrganizers() {
     const rows = await this.prisma.organizer.findMany({
@@ -39,7 +43,7 @@ export class AdminService {
     }));
   }
 
-  async approve(slug: string, adminId: string) {
+  async approve(slug: string, adminId: string, adminEmail: string, ip?: string) {
     const updated = await this.prisma.organizer.updateMany({
       where: { slug, status: { in: ['PENDING', 'SUSPENDED'] } },
       data: { status: 'APPROVED', approvedAt: new Date(), approvedById: adminId },
@@ -47,39 +51,73 @@ export class AdminService {
     if (updated.count === 0) {
       throw new NotFoundException('Organizer not found or already approved');
     }
+    await this.audit.record({
+      actorUserId: adminId,
+      actorEmail: adminEmail,
+      action: 'admin.organizer.approved',
+      targetType: 'organizer',
+      targetId: slug,
+      ip,
+    });
     return this.prisma.organizer.findUniqueOrThrow({
       where: { slug },
       select: { slug: true, status: true, approvedAt: true },
     });
   }
 
-  async suspend(slug: string) {
+  async suspend(slug: string, adminId: string, adminEmail: string, ip?: string) {
     const updated = await this.prisma.organizer.updateMany({
       where: { slug, status: 'APPROVED' },
       data: { status: 'SUSPENDED' },
     });
     if (updated.count === 0) throw new NotFoundException('Organizer not found or not approved');
+    await this.audit.record({
+      actorUserId: adminId,
+      actorEmail: adminEmail,
+      action: 'admin.organizer.suspended',
+      targetType: 'organizer',
+      targetId: slug,
+      ip,
+    });
     return this.prisma.organizer.findUniqueOrThrow({
       where: { slug },
       select: { slug: true, status: true },
     });
   }
 
-  async setCommission(slug: string, bps: number) {
+  async setCommission(slug: string, bps: number, adminId: string, adminEmail: string, ip?: string) {
     const updated = await this.prisma.organizer.update({
       where: { slug },
       data: { commissionBps: bps },
       select: { slug: true, commissionBps: true },
     });
+    await this.audit.record({
+      actorUserId: adminId,
+      actorEmail: adminEmail,
+      action: 'admin.organizer.commission_changed',
+      targetType: 'organizer',
+      targetId: slug,
+      metadata: { bps },
+      ip,
+    });
     return updated;
   }
 
-  async setKycNotes(slug: string, notes: string) {
-    return this.prisma.organizer.update({
+  async setKycNotes(slug: string, notes: string, adminId: string, adminEmail: string, ip?: string) {
+    const updated = await this.prisma.organizer.update({
       where: { slug },
       data: { kycNotes: notes },
       select: { slug: true, kycNotes: true },
     });
+    await this.audit.record({
+      actorUserId: adminId,
+      actorEmail: adminEmail,
+      action: 'admin.organizer.kyc_notes_updated',
+      targetType: 'organizer',
+      targetId: slug,
+      ip,
+    });
+    return updated;
   }
 
   async listPendingKyc() {
