@@ -28,17 +28,22 @@ When prompted:
 it**, it's already ignored. The pair of IDs in it (`projectId`,
 `orgId`) go into GitHub secrets in step 4.
 
-### 2. Vercel project settings
+### 2. Vercel project settings (one dashboard step)
 
-The repo's `vercel.json` carries every build setting — there's
-nothing to configure in the dashboard. Specifically:
+In the Vercel dashboard → your project → **Settings → General**:
 
-- **Root Directory**: leave at `/` (default). The `outputDirectory`
-  in vercel.json (`apps/web/.next`) tells Vercel where the build
-  artifact lands.
-- **Framework Preset**: auto-detected as Next.js (or set explicitly
-  if you want).
-- **Build / Install / Output**: don't override — let vercel.json win.
+| Setting | Value |
+|---|---|
+| **Root Directory** | `apps/web` |
+| Include source files outside Root Directory | **on** |
+| Framework Preset | `Next.js` (auto-detected) |
+| Build / Install / Output | from `apps/web/vercel.json` — don't override |
+
+The Root Directory pointer is required: it tells Vercel which
+`package.json` to scan for the `next` dependency (the root one is the
+monorepo orchestrator and doesn't list `next`). "Include source files
+outside Root Directory" lets the install command reach the workspace
+root for `pnpm-lock.yaml` and `pnpm-workspace.yaml`.
 
 ### 3. Environment variables
 
