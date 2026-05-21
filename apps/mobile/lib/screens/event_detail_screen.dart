@@ -7,6 +7,7 @@ import '../api/api_client.dart';
 import '../api/models.dart';
 import '../state/auth_store.dart';
 import '../theme.dart';
+import '../widgets/seat_picker.dart';
 
 class EventDetailScreen extends StatefulWidget {
   final String slug;
@@ -57,13 +58,27 @@ class _EventDetailBodyState extends State<_EventDetailBody> {
   int _quantity = 1;
   bool _buying = false;
   String? _error;
+  // Seat picker state: lazy-loaded per ticket type. The map is keyed
+  // by ticketTypeId so switching radio choices doesn't refetch.
+  final Map<String, Future<List<Seat>>> _seatsByType = {};
+  Set<String> _selectedSeatIds = {};
 
   @override
   void initState() {
     super.initState();
     if (widget.event.ticketTypes.isNotEmpty) {
       _selectedTicketTypeId = widget.event.ticketTypes.first.id;
+      _loadSeatsFor(widget.event.ticketTypes.first.id);
     }
+  }
+
+  /// Probe the seat-map endpoint. Empty list → general admission;
+  /// non-empty → render the picker and require selection.
+  void _loadSeatsFor(String ticketTypeId) {
+    _seatsByType.putIfAbsent(
+      ticketTypeId,
+      () => context.read<ApiClient>().listSeats(ticketTypeId),
+    );
   }
 
   Future<void> _buy() async {
@@ -82,12 +97,14 @@ class _EventDetailBodyState extends State<_EventDetailBody> {
       _error = null;
     });
     try {
+      final seatIds = _selectedSeatIds.toList();
       final res = await context.read<ApiClient>().createOrder(
             eventSlug: widget.event.slug,
             buyerEmail: email,
             buyerName: auth.name,
             ticketTypeId: tt.id,
-            quantity: _quantity,
+            quantity: seatIds.isNotEmpty ? seatIds.length : _quantity,
+            seatIds: seatIds.isEmpty ? null : seatIds,
             token: auth.token,
           );
       final url = Uri.parse(res.authorizationUrl);
@@ -134,7 +151,13 @@ class _EventDetailBodyState extends State<_EventDetailBody> {
               value: t.id,
               groupValue: _selectedTicketTypeId,
               onChanged: available
-                  ? (v) => setState(() => _selectedTicketTypeId = v)
+                  ? (v) {
+                      setState(() {
+                        _selectedTicketTypeId = v;
+                        _selectedSeatIds = {};
+                      });
+                      if (v != null) _loadSeatsFor(v);
+                    }
                   : null,
               title: Text(t.name),
               subtitle: Text(available ? '$remaining left' : 'Sold out'),
@@ -143,36 +166,91 @@ class _EventDetailBodyState extends State<_EventDetailBody> {
             );
           }),
           const SizedBox(height: 8),
-          Row(
-            children: [
-              const Text('Quantity', style: TextStyle(fontWeight: FontWeight.w500)),
-              const Spacer(),
-              IconButton(
-                onPressed: _quantity > 1 ? () => setState(() => _quantity--) : null,
-                icon: const Icon(Icons.remove_circle_outline),
-              ),
-              Text('$_quantity', style: const TextStyle(fontSize: 16)),
-              IconButton(
-                onPressed: _quantity < 10 ? () => setState(() => _quantity++) : null,
-                icon: const Icon(Icons.add_circle_outline),
-              ),
-            ],
-          ),
+          if (_selectedTicketTypeId != null)
+            FutureBuilder<List<Seat>>(
+              future: _seatsByType[_selectedTicketTypeId!],
+              builder: (context, snap) {
+                if (snap.connectionState == ConnectionState.waiting) {
+                  return const SizedBox(height: 0);
+                }
+                final seats = snap.data ?? const <Seat>[];
+                if (seats.isEmpty) {
+                  // General admission: keep the existing quantity stepper.
+                  return Row(
+                    children: [
+                      const Text('Quantity',
+                          style: TextStyle(fontWeight: FontWeight.w500)),
+                      const Spacer(),
+                      IconButton(
+                        onPressed: _quantity > 1
+                            ? () => setState(() => _quantity--)
+                            : null,
+                        icon: const Icon(Icons.remove_circle_outline),
+                      ),
+                      Text('$_quantity', style: const TextStyle(fontSize: 16)),
+                      IconButton(
+                        onPressed: _quantity < 10
+                            ? () => setState(() => _quantity++)
+                            : null,
+                        icon: const Icon(Icons.add_circle_outline),
+                      ),
+                    ],
+                  );
+                }
+                // Reserved seating: hide the quantity stepper, show the picker.
+                // The buy button enforces "at least one seat selected".
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Text('Pick your seats',
+                        style: TextStyle(fontWeight: FontWeight.w500)),
+                    const SizedBox(height: 8),
+                    SeatPicker(
+                      seats: seats,
+                      selectedIds: _selectedSeatIds,
+                      maxQuantity: 10,
+                      onChanged: (ids) => setState(() => _selectedSeatIds = ids),
+                    ),
+                  ],
+                );
+              },
+            ),
           if (_error != null) ...[
             const SizedBox(height: 8),
             Text(_error!, style: const TextStyle(color: Colors.red)),
           ],
           const SizedBox(height: 16),
-          ElevatedButton(
-            onPressed: _buying || _selectedTicketTypeId == null ? null : _buy,
-            child: _buying
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                  )
-                : const Text('Pay with Paystack'),
-          ),
+          Builder(builder: (context) {
+            // Reserved seating ticket types require at least one seat
+            // picked before the buy button enables. We can tell which
+            // mode we're in from whether the cached future has resolved
+            // a non-empty list.
+            final seatsFut = _selectedTicketTypeId == null
+                ? null
+                : _seatsByType[_selectedTicketTypeId!];
+            return FutureBuilder<List<Seat>>(
+              future: seatsFut,
+              builder: (context, snap) {
+                final hasSeats = (snap.data ?? const <Seat>[]).isNotEmpty;
+                final disabled = _buying ||
+                    _selectedTicketTypeId == null ||
+                    (hasSeats && _selectedSeatIds.isEmpty);
+                return ElevatedButton(
+                  onPressed: disabled ? null : _buy,
+                  child: _buying
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: Colors.white),
+                        )
+                      : Text(hasSeats && _selectedSeatIds.isEmpty
+                          ? 'Pick at least one seat'
+                          : 'Pay with Paystack'),
+                );
+              },
+            );
+          }),
           const SizedBox(height: 8),
           const Text(
             'You\'ll be taken to Paystack to complete payment. Your tickets appear under "Tickets" once payment confirms.',

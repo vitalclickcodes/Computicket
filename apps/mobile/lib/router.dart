@@ -1,13 +1,16 @@
 import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
+import 'screens/dashboard_screen.dart';
 import 'screens/event_detail_screen.dart';
 import 'screens/events_screen.dart';
 import 'screens/my_tickets_screen.dart';
 import 'screens/profile_screen.dart';
+import 'screens/scanner_screen.dart';
 import 'screens/shell.dart';
 import 'screens/signin_screen.dart';
 import 'screens/signup_screen.dart';
 import 'screens/ticket_detail_screen.dart';
+import 'screens/wallet_screen.dart';
 import 'state/auth_store.dart';
 
 GoRouter buildRouter(AuthStore auth) {
@@ -19,8 +22,11 @@ GoRouter buildRouter(AuthStore auth) {
       final loggedIn = auth.isSignedIn;
       final atAuth = state.matchedLocation == '/signin' ||
           state.matchedLocation == '/signup';
-      final needsAuth =
-          state.matchedLocation == '/tickets' || state.matchedLocation == '/profile';
+      final needsAuth = state.matchedLocation == '/tickets' ||
+          state.matchedLocation == '/profile' ||
+          state.matchedLocation == '/wallet' ||
+          state.matchedLocation == '/scanner' ||
+          state.matchedLocation.startsWith('/dashboard');
       if (!loggedIn && needsAuth) return '/signin?next=${state.matchedLocation}';
       if (loggedIn && atAuth) return '/events';
       return null;
@@ -55,6 +61,20 @@ GoRouter buildRouter(AuthStore auth) {
           GoRoute(
             path: '/profile',
             builder: (_, __) => const ProfileScreen(),
+          ),
+        ],
+      ),
+      GoRoute(path: '/wallet', builder: (_, __) => const WalletScreen()),
+      GoRoute(path: '/scanner', builder: (_, __) => const ScannerScreen()),
+      GoRoute(
+        path: '/dashboard',
+        builder: (_, __) => const DashboardScreen(),
+        routes: [
+          GoRoute(
+            path: ':organizerSlug',
+            builder: (_, st) => OrganizerDashboardScreen(
+              organizerSlug: st.pathParameters['organizerSlug']!,
+            ),
           ),
         ],
       ),

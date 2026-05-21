@@ -151,6 +151,7 @@ class ApiClient {
     String? buyerName,
     required String ticketTypeId,
     required int quantity,
+    List<String>? seatIds,
     String? token,
   }) async {
     final raw = await _send(
@@ -162,11 +163,71 @@ class ApiClient {
         'buyerEmail': buyerEmail,
         if (buyerName != null) 'buyerName': buyerName,
         'items': [
-          {'ticketTypeId': ticketTypeId, 'quantity': quantity},
+          {
+            'ticketTypeId': ticketTypeId,
+            'quantity': quantity,
+            if (seatIds != null && seatIds.isNotEmpty) 'seatIds': seatIds,
+          },
         ],
       },
     );
     return CreateOrderResponse.fromJson(raw);
+  }
+
+  Future<List<Seat>> listSeats(String ticketTypeId) async {
+    final raw = await _send('GET', '/ticket-types/$ticketTypeId/seats');
+    return ((raw['data'] ?? <dynamic>[]) as List<dynamic>)
+        .map((s) => Seat.fromJson(s as Map<String, dynamic>))
+        .toList();
+  }
+
+  // ---------- Wallet ----------
+
+  Future<WalletOverview> walletOverview(String token) async {
+    final raw = await _send('GET', '/me/wallet', token: token);
+    return WalletOverview.fromJson(raw);
+  }
+
+  Future<TopUpResponse> walletTopUp({
+    required String token,
+    required int amountKobo,
+    String? callbackUrl,
+  }) async {
+    final raw = await _send(
+      'POST',
+      '/me/wallet/top-ups',
+      token: token,
+      body: {
+        'amountKobo': amountKobo,
+        if (callbackUrl != null) 'callbackUrl': callbackUrl,
+      },
+    );
+    return TopUpResponse.fromJson(raw);
+  }
+
+  // ---------- Scanner ----------
+
+  Future<ScanResult> scanTicket({required String token, required String code}) async {
+    final raw = await _send(
+      'POST',
+      '/tickets/scan',
+      token: token,
+      body: {'code': code},
+    );
+    return ScanResult.fromJson(raw);
+  }
+
+  // ---------- Organizer dashboard ----------
+
+  Future<List<Membership>> myMemberships(String token) async {
+    final raw = await _send('GET', '/auth/me', token: token);
+    final list = (raw['memberships'] ?? <dynamic>[]) as List<dynamic>;
+    return list.map((m) => Membership.fromJson(m as Map<String, dynamic>)).toList();
+  }
+
+  Future<DashboardOverview> dashboardOverview(String token, String organizerSlug) async {
+    final raw = await _send('GET', '/dashboard/organizers/$organizerSlug', token: token);
+    return DashboardOverview.fromJson(raw);
   }
 
   // ---------- Buyer self ----------

@@ -187,6 +187,181 @@ class EventStub {
       );
 }
 
+class WalletTransaction {
+  final String id;
+  final int amountKobo;
+  final String type;
+  final int balanceAfterKobo;
+  final String? note;
+  final DateTime createdAt;
+  WalletTransaction({
+    required this.id,
+    required this.amountKobo,
+    required this.type,
+    required this.balanceAfterKobo,
+    required this.createdAt,
+    this.note,
+  });
+  factory WalletTransaction.fromJson(Map<String, dynamic> j) => WalletTransaction(
+        id: j['id'] as String,
+        amountKobo: j['amountKobo'] as int,
+        type: j['type'] as String,
+        balanceAfterKobo: j['balanceAfterKobo'] as int,
+        note: j['note'] as String?,
+        createdAt: DateTime.parse(j['createdAt'] as String),
+      );
+}
+
+class WalletOverview {
+  final int balanceKobo;
+  final List<WalletTransaction> transactions;
+  WalletOverview({required this.balanceKobo, required this.transactions});
+  factory WalletOverview.fromJson(Map<String, dynamic> j) => WalletOverview(
+        balanceKobo: j['balanceKobo'] as int,
+        transactions: (j['transactions'] as List<dynamic>)
+            .map((t) => WalletTransaction.fromJson(t as Map<String, dynamic>))
+            .toList(),
+      );
+}
+
+class TopUpResponse {
+  final String authorizationUrl;
+  final String paystackRef;
+  final int amountKobo;
+  TopUpResponse({
+    required this.authorizationUrl,
+    required this.paystackRef,
+    required this.amountKobo,
+  });
+  factory TopUpResponse.fromJson(Map<String, dynamic> j) {
+    final paystack = j['paystack'] as Map<String, dynamic>;
+    final topUp = j['topUp'] as Map<String, dynamic>;
+    return TopUpResponse(
+      authorizationUrl: paystack['authorizationUrl'] as String,
+      paystackRef: paystack['reference'] as String,
+      amountKobo: topUp['amountKobo'] as int,
+    );
+  }
+}
+
+class ScanResult {
+  final bool ok;
+  final String? reason; // already_scanned | voided
+  final String code;
+  final String status;
+  final String? scannedAt;
+  final String ticketTypeName;
+  final String eventTitle;
+  ScanResult({
+    required this.ok,
+    required this.code,
+    required this.status,
+    required this.ticketTypeName,
+    required this.eventTitle,
+    this.reason,
+    this.scannedAt,
+  });
+  factory ScanResult.fromJson(Map<String, dynamic> j) {
+    final t = j['ticket'] as Map<String, dynamic>;
+    return ScanResult(
+      ok: j['ok'] as bool,
+      reason: j['reason'] as String?,
+      code: t['code'] as String,
+      status: t['status'] as String,
+      scannedAt: t['scannedAt'] as String?,
+      ticketTypeName: t['ticketTypeName'] as String,
+      eventTitle: t['eventTitle'] as String,
+    );
+  }
+}
+
+class Seat {
+  final String id;
+  final String row;
+  final String label;
+  final String status; // AVAILABLE | HELD | SOLD
+  Seat({required this.id, required this.row, required this.label, required this.status});
+  factory Seat.fromJson(Map<String, dynamic> j) => Seat(
+        id: j['id'] as String,
+        row: j['row'] as String,
+        label: j['label'] as String,
+        status: j['status'] as String,
+      );
+}
+
+class DashboardEventRow {
+  final String id;
+  final String slug;
+  final String title;
+  final String city;
+  final String status;
+  final int capacity;
+  final int sold;
+  final int held;
+  final int revenueKobo;
+  final int paidOrders;
+  DashboardEventRow({
+    required this.id,
+    required this.slug,
+    required this.title,
+    required this.city,
+    required this.status,
+    required this.capacity,
+    required this.sold,
+    required this.held,
+    required this.revenueKobo,
+    required this.paidOrders,
+  });
+  factory DashboardEventRow.fromJson(Map<String, dynamic> j) => DashboardEventRow(
+        id: j['id'] as String,
+        slug: j['slug'] as String,
+        title: j['title'] as String,
+        city: j['city'] as String,
+        status: j['status'] as String,
+        capacity: j['capacity'] as int,
+        sold: j['sold'] as int,
+        held: j['held'] as int,
+        revenueKobo: j['revenueKobo'] as int,
+        paidOrders: j['paidOrders'] as int,
+      );
+}
+
+class DashboardOverview {
+  final String organizerSlug;
+  final String organizerName;
+  final List<DashboardEventRow> events;
+  DashboardOverview({
+    required this.organizerSlug,
+    required this.organizerName,
+    required this.events,
+  });
+  factory DashboardOverview.fromJson(Map<String, dynamic> j) {
+    final organizer = j['organizer'] as Map<String, dynamic>;
+    return DashboardOverview(
+      organizerSlug: organizer['slug'] as String,
+      organizerName: organizer['name'] as String,
+      events: (j['events'] as List<dynamic>)
+          .map((e) => DashboardEventRow.fromJson(e as Map<String, dynamic>))
+          .toList(),
+    );
+  }
+}
+
+class Membership {
+  final String role;
+  final String organizerSlug;
+  final String organizerName;
+  Membership({required this.role, required this.organizerSlug, required this.organizerName});
+  factory Membership.fromJson(Map<String, dynamic> j) {
+    final org = j['organizer'] as Map<String, dynamic>;
+    return Membership(
+      role: j['role'] as String,
+      organizerSlug: org['slug'] as String,
+      organizerName: org['name'] as String,
+    );
+  }
+}
+
 class CreateOrderResponse {
   final String orderId;
   final String paystackRef;

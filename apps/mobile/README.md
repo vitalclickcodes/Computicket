@@ -3,18 +3,26 @@
 Flutter app for buyers: browse events, sign in (with 2FA), buy tickets through
 Paystack's hosted checkout, and display tickets as QR codes.
 
-## Scope (v1)
+## Scope
 
-- Sign up / sign in (email + password, with TOTP 2FA challenge step)
+Buyer flows
+- Sign up / sign in (email + password, with TOTP 2FA challenge)
 - Browse + search published events
-- Event detail with multi-tier ticket selection and quantity picker
-- "Buy" opens the Paystack authorization URL in the device browser; once
-  the buyer returns, the new ticket appears in the Tickets tab
-- "My tickets" lists paid orders; tapping a ticket shows its QR code
-- Sign out
+- Event detail with multi-tier ticket selection; reserved-seating events
+  surface a tap-to-select seat grid driven by `/v1/ticket-types/:id/seats`
+- "Buy" opens Paystack hosted checkout
+- "My tickets" → QR display
+- Wallet: balance + transaction history + Paystack-funded top-up
 
-Out of scope for v1: organizer dashboard, scanner, wallet top-ups,
-add-ons, seat picker, white-label theming. The web app covers all of
+Organizer member flows
+- Dashboard listing every organizer the user is a member of, plus a
+  per-org overview (total sold + revenue, event status + sell-through
+  bar per event)
+- Scanner: camera QR → `POST /v1/tickets/scan`, with green/orange/red
+  banners for valid / already-scanned / refused
+
+Out of scope (still): add-ons, white-label theming, organizer
+event-edit / publish, KYC submission, refunds. The web app covers
 those today.
 
 ## First-time setup
@@ -36,6 +44,30 @@ The third command reads the `flutter_launcher_icons:` block in
 bucket, the iOS asset catalogue, and the web `favicon.png`. Re-run it
 whenever `assets/icon.png` changes. The CI workflow at
 `.github/workflows/mobile.yml` does both steps automatically.
+
+### Camera permission (Scanner)
+
+`mobile_scanner` needs an explicit camera permission declaration. Once
+`flutter create .` has scaffolded the platform shells, add:
+
+**`ios/Runner/Info.plist`** — under the top-level `<dict>`:
+
+```xml
+<key>NSCameraUsageDescription</key>
+<string>Used to scan ticket QR codes at the gate.</string>
+```
+
+**`android/app/src/main/AndroidManifest.xml`** — at the top of the
+`<manifest>` element:
+
+```xml
+<uses-permission android:name="android.permission.CAMERA" />
+```
+
+The scanner screen handles "permission denied" gracefully — it'll
+surface the OS-level prompt the first time, and the API itself enforces
+the OrganizerMember role on `/v1/tickets/scan` so even an unauthorised
+scan attempt fails cleanly with a 403.
 
 ## Pointing at the API
 

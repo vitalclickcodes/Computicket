@@ -39,9 +39,30 @@ class ProfileScreen extends StatelessWidget {
             onTap: () => context.go('/tickets'),
           ),
           ListTile(
+            leading: const Icon(Icons.account_balance_wallet_outlined),
+            title: const Text('Wallet'),
+            onTap: () => context.go('/wallet'),
+          ),
+          ListTile(
             leading: const Icon(Icons.event_outlined),
             title: const Text('Browse events'),
             onTap: () => context.go('/events'),
+          ),
+          const Divider(),
+          // Always-visible: the dashboard handles its own empty state
+          // when the user isn't a member of any organizer, and the
+          // scanner shows a clear 403 when the API refuses.
+          ListTile(
+            leading: const Icon(Icons.business_outlined),
+            title: const Text('Organizer dashboard'),
+            subtitle: const Text('If you run events on Computicket'),
+            onTap: () => context.go('/dashboard'),
+          ),
+          ListTile(
+            leading: const Icon(Icons.qr_code_scanner_outlined),
+            title: const Text('Scan tickets'),
+            subtitle: const Text('For organizer staff at the gate'),
+            onTap: () => context.go('/scanner'),
           ),
           const Divider(),
           ListTile(
